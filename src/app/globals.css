@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --vinyl-glow: rgba(29, 185, 84, 0.4);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-vinyl-bg text-white font-body antialiased;
+  min-height: 100dvh;
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-vinyl-surface/80 backdrop-blur-md border border-vinyl-border;
+  }
+
+  .btn-primary {
+    @apply bg-vinyl-accent hover:bg-vinyl-accentDim text-black font-semibold
+      px-6 py-3 rounded-full transition-all active:scale-95
+      disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .btn-secondary {
+    @apply glass hover:border-vinyl-accent/50 text-white font-medium
+      px-6 py-3 rounded-full transition-all active:scale-95
+      disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .input-field {
+    @apply w-full bg-vinyl-card border border-vinyl-border rounded-xl
+      px-4 py-3 text-white placeholder:text-gray-500
+      focus:outline-none focus:border-vinyl-accent focus:ring-1 focus:ring-vinyl-accent;
+  }
+}
