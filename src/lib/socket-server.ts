@@ -7,11 +7,10 @@ import {
 } from "./gameLogic";
 import {
   buildChoices,
-  buildSnippetAudioUrl,
   getJayChouTracks,
-  pickTrackWithVideo,
-  SNIPPET_DURATION_SEC,
-} from "./youtube";
+  pickTrackWithPreview,
+  randomSnippetParams,
+} from "./itunes";
 import type {
   ClientRoomView,
   Player,
@@ -53,7 +52,7 @@ function toClientView(room: RoomState, playerId: string): ClientRoomView {
     settings: room.settings,
     phase: room.phase,
     currentRound: room.currentRound,
-    tracks: room.tracks.map(({ id, name }) => ({ id, name, youtubeVideoId: null })),
+    tracks: room.tracks.map(({ id, name, english }) => ({ id, name, english })),
     roundResult: room.roundResult,
   };
 
@@ -64,8 +63,8 @@ function toClientView(room: RoomState, playerId: string): ClientRoomView {
       roundNumber: room.round.roundNumber,
       trackId: room.round.trackId,
       choices: room.round.choices,
-      audioUrl: room.round.audioUrl,
-      youtubeVideoId: room.round.youtubeVideoId,
+      previewUrl: room.round.previewUrl,
+      artworkUrl: room.round.artworkUrl,
       snippetStart: room.round.snippetStart,
       snippetDuration: room.round.snippetDuration,
       roundStartTime: room.round.roundStartTime,
@@ -143,12 +142,12 @@ async function startNextRound(io: Server, code: string) {
 
   room.currentRound += 1;
 
-  const resolved = await pickTrackWithVideo(tracks);
+  const resolved = await pickTrackWithPreview(tracks);
   if (!resolved) {
     const host = room.players.find((p) => p.id === room.hostId);
     if (host) {
       io.to(host.socketId).emit("error", {
-        message: "Could not find YouTube audio. Check fallback video IDs.",
+        message: "Could not load audio previews from iTunes. Try again.",
       });
     }
     room.currentRound -= 1;
@@ -157,8 +156,9 @@ async function startNextRound(io: Server, code: string) {
     return;
   }
 
-  const { track, videoId } = resolved;
-  const choices = buildChoices(track, tracks);
+  const { track, previewUrl, artworkUrl } = resolved;
+  const { choices } = buildChoices(track, tracks);
+  const { snippetStart, snippetDuration } = randomSnippetParams();
   const now = Date.now();
   const audioPlayAt = now + 2000;
 
@@ -166,11 +166,12 @@ async function startNextRound(io: Server, code: string) {
     roundNumber: room.currentRound,
     trackId: track.id,
     correctAnswer: track.name,
+    correctEnglish: track.english,
     choices,
-    audioUrl: buildSnippetAudioUrl(videoId),
-    youtubeVideoId: videoId,
-    snippetStart: 0,
-    snippetDuration: SNIPPET_DURATION_SEC,
+    previewUrl,
+    artworkUrl,
+    snippetStart,
+    snippetDuration,
     votes: {},
     voteTimes: {},
     roundStartTime: now,

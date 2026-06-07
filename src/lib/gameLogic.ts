@@ -5,7 +5,7 @@ export function calculateRoundScores(
   round: RoundState,
   players: Player[]
 ): RoundResult {
-  const correctIndex = round.choices.indexOf(round.correctAnswer);
+  const correctIndex = round.choices.findIndex((c) => c.name === round.correctAnswer);
 
   const voteEntries = players
     .filter((p) => round.votes[p.id] === correctIndex)
@@ -37,6 +37,8 @@ export function calculateRoundScores(
   return {
     roundNumber: round.roundNumber,
     correctAnswer: round.correctAnswer,
+    correctEnglish: round.correctEnglish,
+    artworkUrl: round.artworkUrl,
     choices: round.choices,
     votes: { ...round.votes },
     scoresEarned,

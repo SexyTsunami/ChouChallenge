@@ -35,7 +35,8 @@ export default function GameScreen({ room, playerId, onVote }: GameScreenProps) 
       </header>
 
       <SnippetPlayer
-        audioUrl={round.audioUrl}
+        previewUrl={round.previewUrl}
+        snippetStart={round.snippetStart}
         snippetDuration={round.snippetDuration}
         audioPlayAt={round.audioPlayAt}
       />
@@ -50,7 +51,7 @@ export default function GameScreen({ room, playerId, onVote }: GameScreenProps) 
           const isSelected = selected === index;
           return (
             <button
-              key={`${choice}-${index}`}
+              key={`${choice.name}-${index}`}
               disabled={locked && !isSelected}
               onClick={() => handleSelect(index)}
               className={`w-full text-left px-4 py-4 rounded-xl font-medium transition-all active:scale-[0.98] min-h-[56px] ${
@@ -61,8 +62,19 @@ export default function GameScreen({ room, playerId, onVote }: GameScreenProps) 
                     : "glass hover:border-vinyl-accent/50 hover:bg-vinyl-card"
               }`}
             >
-              <span className="text-gray-500 text-xs mr-2">{index + 1}.</span>
-              {choice}
+              <div className="flex items-baseline">
+                <span className="text-gray-500 text-xs mr-2">{index + 1}.</span>
+                <div>
+                  <span className="block">{choice.name}</span>
+                  <span
+                    className={`block text-xs ${
+                      isSelected ? "text-black/60" : "text-gray-400"
+                    }`}
+                  >
+                    {choice.english}
+                  </span>
+                </div>
+              </div>
             </button>
           );
         })}

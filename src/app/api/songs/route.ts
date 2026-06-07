@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getJayChouTracks } from "@/lib/youtube";
+import { getJayChouTracks } from "@/lib/itunes";
 
 export async function GET() {
   const tracks = getJayChouTracks();

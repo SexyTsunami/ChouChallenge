@@ -41,7 +41,7 @@ export default function StartScreen({
             <span className="text-vinyl-accent">Guess the Intro</span>
           </h1>
           <p className="text-gray-400 mt-3 text-sm">
-            Up to 4 friends · YouTube intros · Speed scoring
+            Up to 4 friends · Song previews · Speed scoring
           </p>
         </header>
 

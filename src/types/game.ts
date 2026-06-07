@@ -13,17 +13,27 @@ export interface RoomSettings {
 
 export interface TrackInfo {
   id: string;
+  /** Chinese title */
   name: string;
-  youtubeVideoId?: string | null;
+  /** English title */
+  english: string;
+}
+
+export interface SongChoice {
+  /** Chinese title */
+  name: string;
+  /** English title */
+  english: string;
 }
 
 export interface RoundState {
   roundNumber: number;
   trackId: string;
   correctAnswer: string;
-  choices: string[];
-  audioUrl: string;
-  youtubeVideoId: string;
+  correctEnglish: string;
+  choices: SongChoice[];
+  previewUrl: string;
+  artworkUrl: string;
   snippetStart: number;
   snippetDuration: number;
   votes: Record<string, number | null>;
@@ -36,7 +46,9 @@ export interface RoundState {
 export interface RoundResult {
   roundNumber: number;
   correctAnswer: string;
-  choices: string[];
+  correctEnglish: string;
+  artworkUrl: string;
+  choices: SongChoice[];
   votes: Record<string, number | null>;
   scoresEarned: Record<string, number>;
   rankings: { playerId: string; nickname: string; choice: number | null; correct: boolean; points: number }[];
@@ -56,8 +68,9 @@ export interface RoomState {
   tracks: TrackInfo[];
 }
 
-export interface ClientRoomView extends Omit<RoomState, "round"> {
-  round?: Omit<RoundState, "correctAnswer" | "votes"> & {
+export interface ClientRoomView extends Omit<RoomState, "round" | "players"> {
+  players: Omit<Player, "socketId">[];
+  round?: Omit<RoundState, "correctAnswer" | "correctEnglish" | "votes" | "voteTimes"> & {
     hasVoted: boolean;
     myVote: number | null;
   };
