@@ -37,4 +37,10 @@ body {
       px-4 py-3 text-white placeholder:text-gray-500
       focus:outline-none focus:border-vinyl-accent focus:ring-1 focus:ring-vinyl-accent;
   }
+
+  .apple-back-button {
+    @apply inline-flex items-center gap-1.5 glass rounded-full px-4 py-2
+      text-sm font-medium text-gray-300 hover:text-vinyl-accent
+      hover:border-vinyl-accent/50 transition-all active:scale-95;
+  }
 }

@@ -79,6 +79,10 @@ export default function GameOverScreen({
           Waiting for host to return to lobby…
         </p>
       )}
+
+      <a href="https://allantien.com" className="apple-back-button">
+        ← Back to Portfolio
+      </a>
     </main>
   );
 }
