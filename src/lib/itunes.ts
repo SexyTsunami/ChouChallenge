@@ -5,8 +5,27 @@ const ITUNES_API = "https://itunes.apple.com/search";
 
 interface ItunesResult {
   trackName?: string;
+  collectionName?: string;
   previewUrl?: string;
   artworkUrl100?: string;
+}
+
+// Live / world-tour recordings have crowd noise and are harder to recognize.
+const LIVE_PATTERNS = [
+  /world tour/i,
+  /\blive\b/i,
+  /concert/i,
+  /演唱會/,
+  /演唱会/,
+  /巡迴/,
+  /巡回/,
+  /现场/,
+  /現場/,
+];
+
+function isLiveRecording(result: ItunesResult): boolean {
+  const text = `${result.trackName ?? ""} ${result.collectionName ?? ""}`;
+  return LIVE_PATTERNS.some((re) => re.test(text));
 }
 
 interface ItunesResponse {
@@ -46,7 +65,7 @@ export function buildChoices(
 export function randomSnippetParams(): { snippetStart: number; snippetDuration: number } {
   // iTunes previews are ~30s; pick a start within the first ~18s.
   const snippetStart = Math.random() * 18;
-  const snippetDuration = 2 + Math.random() * 2; // 2-4s
+  const snippetDuration = 1 + Math.random() * 2; // 1-3s
   return { snippetStart, snippetDuration };
 }
 
@@ -63,7 +82,8 @@ export async function fetchItunesPreview(
     if (!res.ok) return null;
 
     const data = (await res.json()) as ItunesResponse;
-    const hit = data.results?.find((r) => r.previewUrl);
+    // Prefer studio versions; skip the track entirely if only live recordings exist.
+    const hit = data.results?.find((r) => r.previewUrl && !isLiveRecording(r));
     if (!hit?.previewUrl) return null;
 
     const artworkUrl = (hit.artworkUrl100 ?? "").replace("100x100bb", "600x600bb");

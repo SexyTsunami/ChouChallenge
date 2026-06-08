@@ -51,6 +51,45 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result.roundNumber]);
 
+  // Play a 10s background loop of the song (continuing from where the snippet ended).
+  useEffect(() => {
+    if (!result.previewUrl) return;
+
+    const WINDOW_SEC = 10;
+    const audio = new Audio(result.previewUrl);
+    audio.preload = "auto";
+    audio.volume = 0.45;
+
+    const startAt = () =>
+      Math.max(0, Math.min(result.revealStart, (audio.duration || 30) - WINDOW_SEC));
+
+    const restart = () => {
+      audio.currentTime = startAt();
+      audio.play().catch(() => {});
+    };
+
+    const onTimeUpdate = () => {
+      const begin = startAt();
+      if (audio.currentTime >= begin + WINDOW_SEC || audio.currentTime >= (audio.duration || 30) - 0.15) {
+        audio.currentTime = begin;
+      }
+    };
+
+    audio.addEventListener("loadedmetadata", restart);
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("ended", restart);
+
+    if (audio.readyState >= 1) restart();
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener("loadedmetadata", restart);
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("ended", restart);
+      audio.src = "";
+    };
+  }, [result.previewUrl, result.revealStart, result.roundNumber]);
+
   return (
     <main className="min-h-dvh px-4 py-6 max-w-lg mx-auto flex flex-col gap-5">
       <header className="text-center">

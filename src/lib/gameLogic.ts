@@ -39,6 +39,9 @@ export function calculateRoundScores(
     correctAnswer: round.correctAnswer,
     correctEnglish: round.correctEnglish,
     artworkUrl: round.artworkUrl,
+    previewUrl: round.previewUrl,
+    // Continue from where the snippet ended, clamped so a 10s loop fits in the ~30s preview.
+    revealStart: Math.min(round.snippetStart + round.snippetDuration, 20),
     choices: round.choices,
     votes: { ...round.votes },
     scoresEarned,

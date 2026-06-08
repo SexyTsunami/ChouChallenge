@@ -1,7 +1,9 @@
 "use client";
 
 import type { ClientRoomView } from "@/types/game";
-import { MAX_PLAYERS, MAX_ROUNDS, MIN_ROUNDS } from "@/types/game";
+import { MAX_PLAYERS, MAX_ROUNDS, MIN_ROUNDS, PLACEMENT_POINTS } from "@/types/game";
+
+const ORDINALS = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
 
 interface LobbyScreenProps {
   room: ClientRoomView;
@@ -64,6 +66,24 @@ export default function LobbyScreen({
               className="flex items-center justify-center bg-vinyl-card/50 rounded-xl px-4 py-3 border border-dashed border-vinyl-border text-gray-600 text-sm"
             >
               Waiting for player…
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="glass rounded-2xl p-4 mb-6">
+        <h2 className="font-display font-semibold mb-1">Scoring</h2>
+        <p className="text-gray-500 text-xs mb-3">
+          The faster you answer correctly, the more points you earn.
+        </p>
+        <ul className="space-y-1.5">
+          {PLACEMENT_POINTS.map((points, i) => (
+            <li
+              key={i}
+              className="flex items-center justify-between bg-vinyl-card rounded-lg px-3 py-2 text-sm"
+            >
+              <span className="text-gray-300">{ORDINALS[i]} correct answer</span>
+              <span className="font-mono font-bold text-vinyl-accent">{points} pts</span>
             </li>
           ))}
         </ul>

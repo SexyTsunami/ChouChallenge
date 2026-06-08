@@ -40,9 +40,7 @@ export default function StartScreen({
             Multiplayer Trivia
           </p>
           <h1 className="font-display text-3xl sm:text-4xl font-bold leading-tight">
-            Jay Chou
-            <br />
-            <span className="text-vinyl-accent">Guess the Intro</span>
+            <span className="text-vinyl-accent">ChouChallenge</span>
           </h1>
           <p className="text-gray-400 mt-3 text-sm">
             Up to 4 friends · Song previews · Speed scoring

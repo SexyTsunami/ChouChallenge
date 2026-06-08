@@ -48,6 +48,9 @@ export interface RoundResult {
   correctAnswer: string;
   correctEnglish: string;
   artworkUrl: string;
+  previewUrl: string;
+  /** Where the reveal-screen background loop should start (continues from the snippet). */
+  revealStart: number;
   choices: SongChoice[];
   votes: Record<string, number | null>;
   scoresEarned: Record<string, number>;
@@ -85,5 +88,5 @@ export const ROUND_TIMER_SECONDS = 15;
 export const SNIPPET_LOOPS = 3;
 export const LOOP_PAUSE_MS = 400;
 
-/** Points by placement for correct answers (1st through 4th) */
-export const PLACEMENT_POINTS = [1000, 750, 500, 250];
+/** Points by placement for correct answers (1st through 4th, fastest first) */
+export const PLACEMENT_POINTS = [100, 75, 50, 25];

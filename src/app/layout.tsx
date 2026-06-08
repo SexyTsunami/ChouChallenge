@@ -13,7 +13,7 @@ const body = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Jay Chou Guess the Intro",
+  title: "ChouChallenge",
   description: "Multiplayer trivia — guess the Jay Chou song from a tiny intro snippet!",
 };
 
