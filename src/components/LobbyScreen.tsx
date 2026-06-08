@@ -3,7 +3,7 @@
 import type { ClientRoomView } from "@/types/game";
 import { MAX_PLAYERS, MAX_ROUNDS, MIN_ROUNDS, PLACEMENT_POINTS } from "@/types/game";
 
-const ORDINALS = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
+const ORDINAL_WORDS = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"];
 
 interface LobbyScreenProps {
   room: ClientRoomView;
@@ -82,7 +82,7 @@ export default function LobbyScreen({
               key={i}
               className="flex items-center justify-between bg-vinyl-card rounded-lg px-3 py-2 text-sm"
             >
-              <span className="text-gray-300">{ORDINALS[i]} correct answer</span>
+              <span className="text-gray-300">{ORDINAL_WORDS[i]} player to guess correctly</span>
               <span className="font-mono font-bold text-vinyl-accent">{points} pts</span>
             </li>
           ))}

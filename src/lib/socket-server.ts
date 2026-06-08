@@ -128,7 +128,7 @@ async function startNextRound(io: Server, code: string) {
   const tracks = room.tracks.length > 0 ? room.tracks : getTracks();
   room.tracks = tracks;
 
-  if (tracks.length < 6) {
+  if (tracks.length < 8) {
     const host = room.players.find((p) => p.id === room.hostId);
     if (host) {
       io.to(host.socketId).emit("error", {
@@ -157,7 +157,7 @@ async function startNextRound(io: Server, code: string) {
   }
 
   const { track, previewUrl, artworkUrl } = resolved;
-  const { choices } = buildChoices(track, tracks);
+  const { choices } = buildChoices(track, tracks, 8);
   const { snippetStart, snippetDuration } = randomSnippetParams();
   const now = Date.now();
   const audioPlayAt = now + 2000;

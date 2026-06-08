@@ -26,27 +26,31 @@ export default function GameScreen({ room, playerId, onVote }: GameScreenProps) 
   };
 
   return (
-    <main className="min-h-dvh px-4 py-6 max-w-lg mx-auto flex flex-col gap-6">
-      <header className="text-center">
-        <p className="text-gray-400 text-sm">
+    <main className="h-dvh overflow-hidden px-4 py-3 max-w-lg mx-auto flex flex-col gap-3">
+      <header className="text-center shrink-0">
+        <p className="text-gray-400 text-xs">
           Round {round.roundNumber} of {room.settings.rounds}
         </p>
-        <h1 className="font-display text-xl font-bold mt-1">What song is this?</h1>
+        <h1 className="font-display text-lg font-bold leading-tight">What song is this?</h1>
       </header>
 
-      <SnippetPlayer
-        previewUrl={round.previewUrl}
-        snippetStart={round.snippetStart}
-        snippetDuration={round.snippetDuration}
-        audioPlayAt={round.audioPlayAt}
-      />
+      <div className="shrink-0">
+        <SnippetPlayer
+          previewUrl={round.previewUrl}
+          snippetStart={round.snippetStart}
+          snippetDuration={round.snippetDuration}
+          audioPlayAt={round.audioPlayAt}
+        />
+      </div>
 
-      <RoundTimer
-        timerSeconds={round.timerSeconds}
-        roundStartTime={round.roundStartTime}
-      />
+      <div className="shrink-0">
+        <RoundTimer
+          timerSeconds={round.timerSeconds}
+          roundStartTime={round.roundStartTime}
+        />
+      </div>
 
-      <div className="grid grid-cols-1 gap-3 flex-1">
+      <div className="grid grid-cols-2 grid-rows-4 gap-2 flex-1 min-h-0">
         {round.choices.map((choice, index) => {
           const isSelected = selected === index;
           return (
@@ -54,7 +58,7 @@ export default function GameScreen({ room, playerId, onVote }: GameScreenProps) 
               key={`${choice.name}-${index}`}
               disabled={locked && !isSelected}
               onClick={() => handleSelect(index)}
-              className={`w-full text-left px-4 py-4 rounded-xl font-medium transition-all active:scale-[0.98] min-h-[56px] ${
+              className={`h-full min-h-0 w-full text-left px-3 py-2 rounded-xl font-medium transition-all active:scale-[0.98] flex flex-col justify-center overflow-hidden ${
                 isSelected
                   ? "bg-vinyl-accent text-black ring-2 ring-vinyl-accent"
                   : locked
@@ -62,47 +66,43 @@ export default function GameScreen({ room, playerId, onVote }: GameScreenProps) 
                     : "glass hover:border-vinyl-accent/50 hover:bg-vinyl-card"
               }`}
             >
-              <div className="flex items-baseline">
-                <span className="text-gray-500 text-xs mr-2">{index + 1}.</span>
-                <div>
-                  <span className="block">{choice.name}</span>
-                  <span
-                    className={`block text-xs ${
-                      isSelected ? "text-black/60" : "text-gray-400"
-                    }`}
-                  >
-                    {choice.english}
-                  </span>
-                </div>
-              </div>
+              <span className="block text-sm font-semibold leading-tight truncate">
+                {choice.name}
+              </span>
+              <span
+                className={`block text-[11px] leading-tight truncate ${
+                  isSelected ? "text-black/60" : "text-gray-400"
+                }`}
+              >
+                {choice.english}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {locked && (
-        <p className="text-center text-sm text-gray-400 animate-pulse">
+      {locked ? (
+        <p className="text-center text-xs text-vinyl-accent animate-pulse shrink-0">
           Answer locked — waiting for other players…
         </p>
+      ) : (
+        <p className="text-center text-xs text-gray-500 shrink-0">Tap your answer</p>
       )}
 
-      <section className="glass rounded-xl p-3">
-        <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Scoreboard</p>
-        <div className="flex flex-wrap gap-2">
-          {room.players
-            .slice()
-            .sort((a, b) => b.score - a.score)
-            .map((p) => (
-              <span
-                key={p.id}
-                className={`text-sm px-3 py-1 rounded-full ${
-                  p.id === playerId ? "bg-vinyl-accent/20 text-vinyl-accent" : "bg-vinyl-card"
-                }`}
-              >
-                {p.nickname}: {p.score}
-              </span>
-            ))}
-        </div>
+      <section className="shrink-0 flex flex-wrap justify-center gap-1.5">
+        {room.players
+          .slice()
+          .sort((a, b) => b.score - a.score)
+          .map((p) => (
+            <span
+              key={p.id}
+              className={`text-xs px-2.5 py-1 rounded-full ${
+                p.id === playerId ? "bg-vinyl-accent/20 text-vinyl-accent" : "bg-vinyl-card"
+              }`}
+            >
+              {p.nickname}: {p.score}
+            </span>
+          ))}
       </section>
     </main>
   );

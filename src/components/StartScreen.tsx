@@ -42,6 +42,9 @@ export default function StartScreen({
           <h1 className="font-display text-3xl sm:text-4xl font-bold leading-tight">
             <span className="text-vinyl-accent">ChouChallenge</span>
           </h1>
+          <p className="text-gray-300 mt-2 text-base font-medium">
+            Jay Chou Song Guessing Game
+          </p>
           <p className="text-gray-400 mt-3 text-sm">
             Up to 4 friends · Song previews · Speed scoring
           </p>
