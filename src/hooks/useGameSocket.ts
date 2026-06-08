@@ -66,9 +66,12 @@ export function useGameSocket() {
     socketRef.current?.emit("room:ready", { isReady });
   }, []);
 
-  const updateSettings = useCallback((rounds: number) => {
-    socketRef.current?.emit("room:settings", { rounds });
-  }, []);
+  const updateSettings = useCallback(
+    (settings: { rounds?: number; choiceCount?: number }) => {
+      socketRef.current?.emit("room:settings", settings);
+    },
+    []
+  );
 
   const startGame = useCallback(() => {
     socketRef.current?.emit("game:start");

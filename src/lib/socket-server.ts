@@ -21,9 +21,12 @@ import type {
 import {
   AUDIO_PLAY_DELAY_MS,
   AUDIO_SYNC_MAX_WAIT_MS,
+  DEFAULT_CHOICES,
   DEFAULT_ROUNDS,
+  MAX_CHOICES,
   MAX_PLAYERS,
   MAX_ROUNDS,
+  MIN_CHOICES,
   MIN_ROUNDS,
   ROUND_TIMER_SECONDS,
 } from "@/types/game";
@@ -171,7 +174,9 @@ async function startNextRound(io: Server, code: string) {
   const tracks = getTracks();
   room.tracks = tracks;
 
-  if (tracks.length < 8) {
+  const choiceCount = room.settings.choiceCount ?? DEFAULT_CHOICES;
+
+  if (tracks.length < choiceCount) {
     const host = room.players.find((p) => p.id === room.hostId);
     if (host) {
       io.to(host.socketId).emit("error", {
@@ -200,7 +205,7 @@ async function startNextRound(io: Server, code: string) {
   }
 
   const { track, previewUrl, artworkUrl } = resolved;
-  const { choices, correctIndex } = buildChoices(track, tracks, 8);
+  const { choices, correctIndex } = buildChoices(track, tracks, choiceCount);
   const { snippetStart, snippetDuration } = randomSnippetParams();
   const audioReady: Record<string, boolean> = {};
   room.players.forEach((p) => {
@@ -296,7 +301,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         code,
         hostId: playerId,
         players: [player],
-        settings: { rounds: DEFAULT_ROUNDS },
+        settings: { rounds: DEFAULT_ROUNDS, choiceCount: DEFAULT_CHOICES },
         phase: "lobby",
         currentRound: 0,
         tracks,
@@ -358,16 +363,27 @@ export function initSocketServer(httpServer: HttpServer): Server {
       broadcastRoom(io, room);
     });
 
-    socket.on("room:settings", ({ rounds }: { rounds: number }) => {
-      if (!currentPlayerId) return;
-      const roomCode = playerToRoom.get(currentPlayerId);
-      if (!roomCode) return;
-      const room = getRoom(roomCode);
-      if (!room || room.hostId !== currentPlayerId) return;
+    socket.on(
+      "room:settings",
+      ({ rounds, choiceCount }: { rounds?: number; choiceCount?: number }) => {
+        if (!currentPlayerId) return;
+        const roomCode = playerToRoom.get(currentPlayerId);
+        if (!roomCode) return;
+        const room = getRoom(roomCode);
+        if (!room || room.hostId !== currentPlayerId) return;
 
-      room.settings.rounds = Math.min(MAX_ROUNDS, Math.max(MIN_ROUNDS, rounds));
-      broadcastRoom(io, room);
-    });
+        if (rounds !== undefined) {
+          room.settings.rounds = Math.min(MAX_ROUNDS, Math.max(MIN_ROUNDS, rounds));
+        }
+        if (choiceCount !== undefined) {
+          room.settings.choiceCount = Math.min(
+            MAX_CHOICES,
+            Math.max(MIN_CHOICES, choiceCount)
+          );
+        }
+        broadcastRoom(io, room);
+      }
+    );
 
     socket.on("game:start", async () => {
       if (!currentPlayerId) return;

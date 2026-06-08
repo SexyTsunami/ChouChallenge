@@ -1,7 +1,15 @@
 "use client";
 
 import type { ClientRoomView } from "@/types/game";
-import { MAX_PLAYERS, MAX_ROUNDS, MIN_ROUNDS, PLACEMENT_POINTS } from "@/types/game";
+import {
+  MAX_CHOICES,
+  MAX_PLAYERS,
+  MAX_ROUNDS,
+  MIN_CHOICES,
+  MIN_ROUNDS,
+  DEFAULT_CHOICES,
+  PLACEMENT_POINTS,
+} from "@/types/game";
 
 const ORDINAL_WORDS = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"];
 
@@ -9,7 +17,7 @@ interface LobbyScreenProps {
   room: ClientRoomView;
   playerId: string;
   onReady: (ready: boolean) => void;
-  onSettings: (rounds: number) => void;
+  onSettings: (settings: { rounds?: number; choiceCount?: number }) => void;
   onStart: () => void;
 }
 
@@ -24,6 +32,7 @@ export default function LobbyScreen({
   const isHost = me?.isHost ?? false;
   const allReady = room.players.length >= 1 && room.players.every((p) => p.isReady);
   const canStart = isHost && allReady && room.players.length >= 1;
+  const choiceCount = room.settings.choiceCount ?? DEFAULT_CHOICES;
 
   return (
     <main className="min-h-dvh px-4 py-6 max-w-lg mx-auto">
@@ -93,16 +102,28 @@ export default function LobbyScreen({
         <section className="glass rounded-2xl p-4 mb-6">
           <h2 className="font-display font-semibold mb-3">Game Settings</h2>
           <label className="block text-sm text-gray-400 mb-2">Number of rounds</label>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 mb-5">
             <input
               type="range"
               min={MIN_ROUNDS}
               max={MAX_ROUNDS}
               value={room.settings.rounds}
-              onChange={(e) => onSettings(parseInt(e.target.value, 10))}
+              onChange={(e) => onSettings({ rounds: parseInt(e.target.value, 10) })}
               className="flex-1 accent-vinyl-accent"
             />
             <span className="font-mono text-xl w-8 text-center">{room.settings.rounds}</span>
+          </div>
+          <label className="block text-sm text-gray-400 mb-2">Answer choices per round</label>
+          <div className="flex items-center gap-4">
+            <input
+              type="range"
+              min={MIN_CHOICES}
+              max={MAX_CHOICES}
+              value={choiceCount}
+              onChange={(e) => onSettings({ choiceCount: parseInt(e.target.value, 10) })}
+              className="flex-1 accent-vinyl-accent"
+            />
+            <span className="font-mono text-xl w-8 text-center">{choiceCount}</span>
           </div>
         </section>
       )}

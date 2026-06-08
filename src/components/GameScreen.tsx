@@ -55,7 +55,12 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
         />
       </div>
 
-      <div className="grid grid-cols-2 grid-rows-4 gap-2 flex-1 min-h-0">
+      <div
+        className="grid grid-cols-2 gap-2 flex-1 min-h-0"
+        style={{
+          gridTemplateRows: `repeat(${Math.ceil(round.choices.length / 2)}, minmax(0, 1fr))`,
+        }}
+      >
         {round.choices.map((choice, index) => {
           const isSelected = selected === index;
           return (
@@ -63,12 +68,12 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
               key={`${choice.name}-${index}`}
               disabled={(locked && !isSelected) || round.audioSyncing}
               onClick={() => handleSelect(index)}
-              className={`h-full min-h-0 w-full text-left px-3 py-2 rounded-xl font-medium transition-all active:scale-[0.98] flex flex-col justify-center overflow-hidden ${
+              className={`h-full min-h-0 w-full text-left px-3 py-2 rounded-xl font-medium transition-colors flex flex-col justify-center overflow-hidden border-2 box-border touch-manipulation ${
                 isSelected
-                  ? "bg-vinyl-accent text-black ring-2 ring-vinyl-accent"
+                  ? "bg-vinyl-accent text-black border-vinyl-accent"
                   : locked
-                    ? "bg-vinyl-card/50 text-gray-500 cursor-not-allowed"
-                    : "glass hover:border-vinyl-accent/50 hover:bg-vinyl-card"
+                    ? "bg-vinyl-card/50 text-gray-500 cursor-not-allowed border-vinyl-border/30"
+                    : "bg-vinyl-surface/80 border-vinyl-border hover:border-vinyl-accent/50 hover:bg-vinyl-card"
               }`}
             >
               <span className="block text-sm font-semibold leading-tight truncate">
@@ -86,15 +91,19 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
         })}
       </div>
 
-      {locked ? (
-        <p className="text-center text-xs text-vinyl-accent animate-pulse shrink-0">
-          Answer locked — waiting for other players…
+      <div className="shrink-0 h-10 flex items-center justify-center px-2">
+        <p
+          className={`text-center text-xs leading-snug ${
+            locked ? "text-vinyl-accent animate-pulse" : "text-gray-500"
+          }`}
+        >
+          {locked
+            ? "Answer locked — waiting for other players…"
+            : "Tap your answer"}
         </p>
-      ) : (
-        <p className="text-center text-xs text-gray-500 shrink-0">Tap your answer</p>
-      )}
+      </div>
 
-      <section className="shrink-0 flex flex-wrap justify-center gap-1.5">
+      <section className="shrink-0 min-h-8 flex flex-wrap justify-center items-center gap-1.5">
         {room.players
           .slice()
           .sort((a, b) => b.score - a.score)

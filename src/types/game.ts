@@ -9,6 +9,8 @@ export interface Player {
 
 export interface RoomSettings {
   rounds: number;
+  /** Number of multiple-choice options per round (4–8). */
+  choiceCount: number;
 }
 
 export interface TrackInfo {
@@ -95,6 +97,9 @@ export const MAX_PLAYERS = 4;
 export const MIN_ROUNDS = 3;
 export const MAX_ROUNDS = 15;
 export const DEFAULT_ROUNDS = 5;
+export const MIN_CHOICES = 4;
+export const MAX_CHOICES = 8;
+export const DEFAULT_CHOICES = 8;
 export const ROUND_TIMER_SECONDS = 15;
 export const SNIPPET_LOOPS = 3;
 export const LOOP_PAUSE_MS = 400;
