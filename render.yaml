@@ -1,0 +1,23 @@
+# Render Blueprint — deploy ChouChallenge as a Docker web service (free tier).
+# https://render.com/docs/blueprint-spec
+#
+# Setup:
+#   1. Push this repo to GitHub
+#   2. Render Dashboard → New → Blueprint → connect repo
+#   3. After deploy: Settings → Custom Domains → add chouchallenge.allantien.com
+#   4. DNS: CNAME chouchallenge → <your-service>.onrender.com
+services:
+  - type: web
+    name: chouchallenge
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOSTNAME
+        value: 0.0.0.0

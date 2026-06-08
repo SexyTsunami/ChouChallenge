@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.cursor
+terminals
+*.log
+debug-*.log
+1780*.js
+npm-debug.log*
+.DS_Store
+.env*

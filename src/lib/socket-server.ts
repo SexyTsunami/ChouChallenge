@@ -222,7 +222,6 @@ export function initSocketServer(httpServer: HttpServer): Server {
 
   io.on("connection", (socket: Socket) => {
     let currentPlayerId: string | null = null;
-    console.log(`[socket] connect id=${socket.id} transport=${socket.conn.transport.name}`);
 
     socket.on("room:create", async ({ nickname }: { nickname: string }) => {
       const playerId = uuidv4();
@@ -400,8 +399,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
       broadcastRoom(io, room);
     });
 
-    socket.on("disconnect", (reason) => {
-      console.log(`[socket] disconnect id=${socket.id} reason=${reason}`);
+    socket.on("disconnect", () => {
       if (currentPlayerId) {
         removePlayer(io, currentPlayerId);
       }
