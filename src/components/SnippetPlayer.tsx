@@ -8,6 +8,10 @@ interface SnippetPlayerProps {
   snippetStart: number;
   snippetDuration: number;
   audioPlayAt: number;
+  audioSyncing?: boolean;
+  syncReadyCount?: number;
+  syncTotalPlayers?: number;
+  onAudioReady?: () => void;
   onComplete?: () => void;
 }
 
@@ -24,17 +28,55 @@ export default function SnippetPlayer({
   snippetStart,
   snippetDuration,
   audioPlayAt,
+  audioSyncing = false,
+  syncReadyCount = 0,
+  syncTotalPlayers = 1,
+  onAudioReady,
   onComplete,
 }: SnippetPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
+  const readySignaledRef = useRef(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentLoop, setCurrentLoop] = useState(-1);
 
+  // Preload audio and notify server when ready.
   useEffect(() => {
+    readySignaledRef.current = false;
+    setIsLoaded(false);
+    setIsPlaying(false);
+    setCurrentLoop(-1);
+
     const audio = new Audio(previewUrl);
     audio.preload = "auto";
     audioRef.current = audio;
+
+    const signalReady = () => {
+      setIsLoaded(true);
+      if (!readySignaledRef.current) {
+        readySignaledRef.current = true;
+        onAudioReady?.();
+      }
+    };
+
+    audio.addEventListener("canplaythrough", signalReady);
+    if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      signalReady();
+    }
+
+    return () => {
+      audio.removeEventListener("canplaythrough", signalReady);
+      audio.pause();
+      audio.src = "";
+      audioRef.current = null;
+    };
+  }, [previewUrl, onAudioReady]);
+
+  // Start playback once server sets a shared audioPlayAt timestamp.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !isLoaded || audioPlayAt <= 0) return;
 
     const clearAll = () => {
       timeoutsRef.current.forEach(clearTimeout);
@@ -72,16 +114,25 @@ export default function SnippetPlayer({
       timeoutsRef.current.push(stopTimeout);
     };
 
+    clearAll();
     const delay = Math.max(0, audioPlayAt - Date.now());
     const startTimeout = setTimeout(() => playLoop(0), delay);
     timeoutsRef.current.push(startTimeout);
 
-    return () => {
-      clearAll();
-      audio.pause();
-      audio.src = "";
-    };
-  }, [previewUrl, snippetStart, snippetDuration, audioPlayAt, onComplete]);
+    return clearAll;
+  }, [isLoaded, audioPlayAt, snippetStart, snippetDuration, onComplete]);
+
+  const statusText = !isLoaded
+    ? "Loading preview…"
+    : audioSyncing
+      ? `Syncing players… (${syncReadyCount}/${syncTotalPlayers})`
+      : isPlaying
+        ? "Now Playing"
+        : currentLoop === -1
+          ? "Get ready…"
+          : "Paused";
+
+  const showLoading = !isLoaded || audioSyncing;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -89,11 +140,14 @@ export default function SnippetPlayer({
         <div className="relative flex-shrink-0">
           <div
             className={`w-3 h-3 rounded-full transition-colors duration-300 ${
-              isPlaying ? "bg-vinyl-accent" : "bg-gray-600"
+              isPlaying ? "bg-vinyl-accent" : showLoading ? "bg-amber-400" : "bg-gray-600"
             }`}
           />
           {isPlaying && (
             <span className="absolute inset-0 rounded-full bg-vinyl-accent animate-ping opacity-60" />
+          )}
+          {showLoading && !isPlaying && (
+            <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-40" />
           )}
         </div>
 
@@ -102,19 +156,23 @@ export default function SnippetPlayer({
             <div
               key={i}
               className={`w-1.5 rounded-sm origin-bottom transition-colors duration-300 ${
-                isPlaying ? `bg-vinyl-accent ${anim}` : "bg-gray-600"
+                isPlaying ? `bg-vinyl-accent ${anim}` : showLoading ? "bg-amber-400/70" : "bg-gray-600"
               }`}
-              style={{ height: isPlaying ? "24px" : "3px" }}
+              style={{ height: isPlaying ? "24px" : showLoading ? "12px" : "3px" }}
             />
           ))}
         </div>
 
         <span
           className={`text-xs font-medium tracking-wide transition-colors duration-300 ${
-            isPlaying ? "text-vinyl-accent" : "text-gray-500"
+            isPlaying
+              ? "text-vinyl-accent"
+              : showLoading
+                ? "text-amber-400"
+                : "text-gray-500"
           }`}
         >
-          {isPlaying ? "Now Playing" : currentLoop === -1 ? "Get ready…" : "Paused"}
+          {statusText}
         </span>
       </div>
 
@@ -136,9 +194,11 @@ export default function SnippetPlayer({
       </div>
 
       <p className="text-xs text-gray-500">
-        {currentLoop >= 0
-          ? `Loop ${Math.min(currentLoop + 1, SNIPPET_LOOPS)} of ${SNIPPET_LOOPS}`
-          : "Listen closely…"}
+        {showLoading
+          ? "Please wait — everyone hears the snippets together"
+          : currentLoop >= 0
+            ? `Loop ${Math.min(currentLoop + 1, SNIPPET_LOOPS)} of ${SNIPPET_LOOPS}`
+            : "Listen closely…"}
       </p>
     </div>
   );

@@ -9,9 +9,10 @@ interface GameScreenProps {
   room: ClientRoomView;
   playerId: string;
   onVote: (choiceIndex: number) => void;
+  onAudioReady: () => void;
 }
 
-export default function GameScreen({ room, playerId, onVote }: GameScreenProps) {
+export default function GameScreen({ room, playerId, onVote, onAudioReady }: GameScreenProps) {
   const round = room.round!;
   const [selected, setSelected] = useState<number | null>(
     round.hasVoted ? round.myVote : null
@@ -19,7 +20,7 @@ export default function GameScreen({ room, playerId, onVote }: GameScreenProps) 
   const [locked, setLocked] = useState(round.hasVoted);
 
   const handleSelect = (index: number) => {
-    if (locked) return;
+    if (locked || round.audioSyncing) return;
     setSelected(index);
     setLocked(true);
     onVote(index);
@@ -40,6 +41,10 @@ export default function GameScreen({ room, playerId, onVote }: GameScreenProps) 
           snippetStart={round.snippetStart}
           snippetDuration={round.snippetDuration}
           audioPlayAt={round.audioPlayAt}
+          audioSyncing={round.audioSyncing}
+          syncReadyCount={round.syncReadyCount}
+          syncTotalPlayers={round.syncTotalPlayers}
+          onAudioReady={onAudioReady}
         />
       </div>
 
@@ -56,7 +61,7 @@ export default function GameScreen({ room, playerId, onVote }: GameScreenProps) 
           return (
             <button
               key={`${choice.name}-${index}`}
-              disabled={locked && !isSelected}
+              disabled={(locked && !isSelected) || round.audioSyncing}
               onClick={() => handleSelect(index)}
               className={`h-full min-h-0 w-full text-left px-3 py-2 rounded-xl font-medium transition-all active:scale-[0.98] flex flex-col justify-center overflow-hidden ${
                 isSelected

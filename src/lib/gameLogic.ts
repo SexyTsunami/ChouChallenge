@@ -5,7 +5,16 @@ export function calculateRoundScores(
   round: RoundState,
   players: Player[]
 ): RoundResult {
-  const correctIndex = round.choices.findIndex((c) => c.name === round.correctAnswer);
+  let correctIndex = round.correctChoiceIndex;
+  if (
+    correctIndex < 0 ||
+    correctIndex >= round.choices.length ||
+    round.choices[correctIndex]?.name !== round.correctAnswer
+  ) {
+    correctIndex = round.choices.findIndex(
+      (c) => c.name === round.correctAnswer && c.english === round.correctEnglish
+    );
+  }
 
   const voteEntries = players
     .filter((p) => round.votes[p.id] === correctIndex)

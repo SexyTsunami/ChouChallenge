@@ -20,6 +20,7 @@ export default function HomePage() {
     updateSettings,
     startGame,
     submitVote,
+    signalAudioReady,
     nextRound,
     returnToLobby,
   } = useGameSocket();
@@ -58,6 +59,7 @@ export default function HomePage() {
           room={room}
           playerId={playerId}
           onVote={submitVote}
+          onAudioReady={signalAudioReady}
         />
       );
 

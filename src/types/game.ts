@@ -31,6 +31,8 @@ export interface RoundState {
   trackId: string;
   correctAnswer: string;
   correctEnglish: string;
+  /** Index into `choices` for the correct answer — authoritative for scoring. */
+  correctChoiceIndex: number;
   choices: SongChoice[];
   previewUrl: string;
   artworkUrl: string;
@@ -40,7 +42,10 @@ export interface RoundState {
   voteTimes: Record<string, number>;
   roundStartTime: number;
   timerSeconds: number;
+  /** 0 while clients preload; set when all players are ready. */
   audioPlayAt: number;
+  /** Server-only: which players have finished preloading audio. */
+  audioReady: Record<string, boolean>;
 }
 
 export interface RoundResult {
@@ -73,9 +78,15 @@ export interface RoomState {
 
 export interface ClientRoomView extends Omit<RoomState, "round" | "players"> {
   players: Omit<Player, "socketId">[];
-  round?: Omit<RoundState, "correctAnswer" | "correctEnglish" | "votes" | "voteTimes"> & {
+  round?: Omit<
+    RoundState,
+    "correctAnswer" | "correctEnglish" | "correctChoiceIndex" | "votes" | "voteTimes" | "audioReady"
+  > & {
     hasVoted: boolean;
     myVote: number | null;
+    audioSyncing: boolean;
+    syncReadyCount: number;
+    syncTotalPlayers: number;
   };
   roundResult?: RoundResult;
 }
@@ -87,6 +98,10 @@ export const DEFAULT_ROUNDS = 5;
 export const ROUND_TIMER_SECONDS = 15;
 export const SNIPPET_LOOPS = 3;
 export const LOOP_PAUSE_MS = 400;
+/** Max wait for all players to preload audio before starting anyway */
+export const AUDIO_SYNC_MAX_WAIT_MS = 12000;
+/** Countdown after sync before the first snippet plays */
+export const AUDIO_PLAY_DELAY_MS = 2000;
 
 /** Points by placement for correct answers (1st through 4th, fastest first) */
 export const PLACEMENT_POINTS = [100, 75, 50, 25];

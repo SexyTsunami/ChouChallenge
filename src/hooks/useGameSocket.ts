@@ -78,6 +78,10 @@ export function useGameSocket() {
     socketRef.current?.emit("game:vote", { choiceIndex });
   }, []);
 
+  const signalAudioReady = useCallback(() => {
+    socketRef.current?.emit("game:audioReady");
+  }, []);
+
   const nextRound = useCallback(() => {
     socketRef.current?.emit("game:nextRound");
   }, []);
@@ -100,6 +104,7 @@ export function useGameSocket() {
     updateSettings,
     startGame,
     submitVote,
+    signalAudioReady,
     nextRound,
     returnToLobby,
   };

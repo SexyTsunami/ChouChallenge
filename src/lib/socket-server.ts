@@ -19,6 +19,8 @@ import type {
   TrackInfo,
 } from "@/types/game";
 import {
+  AUDIO_PLAY_DELAY_MS,
+  AUDIO_SYNC_MAX_WAIT_MS,
   DEFAULT_ROUNDS,
   MAX_PLAYERS,
   MAX_ROUNDS,
@@ -29,6 +31,7 @@ import {
 const rooms = new Map<string, RoomState>();
 const playerToRoom = new Map<string, string>();
 const roundTimers = new Map<string, NodeJS.Timeout>();
+const audioSyncTimers = new Map<string, NodeJS.Timeout>();
 
 let cachedTracks: TrackInfo[] | null = null;
 
@@ -70,6 +73,9 @@ function toClientView(room: RoomState, playerId: string): ClientRoomView {
       roundStartTime: room.round.roundStartTime,
       timerSeconds: room.round.timerSeconds,
       audioPlayAt: room.round.audioPlayAt,
+      audioSyncing: room.round.audioPlayAt === 0,
+      syncReadyCount: room.players.filter((p) => room.round!.audioReady[p.id]).length,
+      syncTotalPlayers: room.players.length,
       hasVoted,
       myVote: hasVoted ? myVote : null,
     };
@@ -96,6 +102,41 @@ function clearRoundTimer(code: string) {
   }
 }
 
+function clearAudioSyncTimer(code: string) {
+  const timer = audioSyncTimers.get(code);
+  if (timer) {
+    clearTimeout(timer);
+    audioSyncTimers.delete(code);
+  }
+}
+
+function beginRoundAudio(io: Server, room: RoomState) {
+  if (!room.round || room.round.audioPlayAt > 0) return;
+
+  clearAudioSyncTimer(room.code);
+  const now = Date.now();
+  room.round.audioPlayAt = now + AUDIO_PLAY_DELAY_MS;
+  room.round.roundStartTime = now;
+
+  clearRoundTimer(room.code);
+  const timer = setTimeout(() => {
+    endRound(io, room.code);
+  }, ROUND_TIMER_SECONDS * 1000 + AUDIO_PLAY_DELAY_MS);
+  roundTimers.set(room.code, timer);
+
+  broadcastRoom(io, room);
+}
+
+function maybeStartRoundAudio(io: Server, code: string) {
+  const room = getRoom(code);
+  if (!room?.round || room.phase !== "playing" || room.round.audioPlayAt > 0) return;
+
+  const allReady = room.players.every((p) => room.round!.audioReady[p.id]);
+  if (!allReady) return;
+
+  beginRoundAudio(io, room);
+}
+
 function allPlayersVoted(room: RoomState): boolean {
   if (!room.round) return false;
   return room.players.every(
@@ -108,6 +149,7 @@ async function endRound(io: Server, code: string) {
   if (!room || !room.round || room.phase !== "playing") return;
 
   clearRoundTimer(code);
+  clearAudioSyncTimer(code);
 
   const result = calculateRoundScores(room.round, room.players);
   room.roundResult = result;
@@ -125,7 +167,8 @@ async function startNextRound(io: Server, code: string) {
   const room = getRoom(code);
   if (!room) return;
 
-  const tracks = room.tracks.length > 0 ? room.tracks : getTracks();
+  // Always use the full current catalog so choices and previews stay in sync.
+  const tracks = getTracks();
   room.tracks = tracks;
 
   if (tracks.length < 8) {
@@ -157,16 +200,19 @@ async function startNextRound(io: Server, code: string) {
   }
 
   const { track, previewUrl, artworkUrl } = resolved;
-  const { choices } = buildChoices(track, tracks, 8);
+  const { choices, correctIndex } = buildChoices(track, tracks, 8);
   const { snippetStart, snippetDuration } = randomSnippetParams();
-  const now = Date.now();
-  const audioPlayAt = now + 2000;
+  const audioReady: Record<string, boolean> = {};
+  room.players.forEach((p) => {
+    audioReady[p.id] = false;
+  });
 
   room.round = {
     roundNumber: room.currentRound,
     trackId: track.id,
     correctAnswer: track.name,
     correctEnglish: track.english,
+    correctChoiceIndex: correctIndex,
     choices,
     previewUrl,
     artworkUrl,
@@ -174,9 +220,10 @@ async function startNextRound(io: Server, code: string) {
     snippetDuration,
     votes: {},
     voteTimes: {},
-    roundStartTime: now,
+    roundStartTime: 0,
     timerSeconds: ROUND_TIMER_SECONDS,
-    audioPlayAt,
+    audioPlayAt: 0,
+    audioReady,
   };
 
   room.phase = "playing";
@@ -184,10 +231,12 @@ async function startNextRound(io: Server, code: string) {
   broadcastRoom(io, room);
 
   clearRoundTimer(code);
-  const timer = setTimeout(() => {
-    endRound(io, code);
-  }, ROUND_TIMER_SECONDS * 1000 + 2000);
-  roundTimers.set(code, timer);
+  clearAudioSyncTimer(code);
+  const syncTimer = setTimeout(() => {
+    const r = getRoom(code);
+    if (r) beginRoundAudio(io, r);
+  }, AUDIO_SYNC_MAX_WAIT_MS);
+  audioSyncTimers.set(code, syncTimer);
 }
 
 function removePlayer(io: Server, playerId: string) {
@@ -341,6 +390,18 @@ export function initSocketServer(httpServer: HttpServer): Server {
       await startNextRound(io, room.code);
     });
 
+    socket.on("game:audioReady", () => {
+      if (!currentPlayerId) return;
+      const roomCode = playerToRoom.get(currentPlayerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      if (!room?.round || room.phase !== "playing" || room.round.audioPlayAt > 0) return;
+
+      room.round.audioReady[currentPlayerId] = true;
+      broadcastRoom(io, room);
+      maybeStartRoundAudio(io, roomCode);
+    });
+
     socket.on("game:vote", ({ choiceIndex }: { choiceIndex: number }) => {
       if (!currentPlayerId) return;
       const roomCode = playerToRoom.get(currentPlayerId);
@@ -388,6 +449,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
       if (!room || room.hostId !== currentPlayerId) return;
 
       clearRoundTimer(roomCode);
+      clearAudioSyncTimer(roomCode);
       room.phase = "lobby";
       room.currentRound = 0;
       room.round = undefined;
