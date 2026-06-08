@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { unlockAudioSession } from "@/lib/audioUnlock";
 import VinylRecord from "./VinylRecord";
 
 interface StartScreenProps {
@@ -78,7 +79,10 @@ export default function StartScreen({
               <button
                 className="btn-primary w-full"
                 disabled={!canAct}
-                onClick={() => onCreate(nickname.trim())}
+                onClick={() => {
+                  void unlockAudioSession();
+                  onCreate(nickname.trim());
+                }}
               >
                 Create Lobby
               </button>
@@ -103,7 +107,10 @@ export default function StartScreen({
               <button
                 className="btn-primary w-full"
                 disabled={!canAct || roomCode.length < 4}
-                onClick={() => onJoin(nickname.trim(), roomCode)}
+                onClick={() => {
+                  void unlockAudioSession();
+                  onJoin(nickname.trim(), roomCode);
+                }}
               >
                 Join Room
               </button>

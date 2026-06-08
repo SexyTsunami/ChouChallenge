@@ -67,7 +67,7 @@ export function useGameSocket() {
   }, []);
 
   const updateSettings = useCallback(
-    (settings: { rounds?: number; choiceCount?: number }) => {
+    (settings: { rounds?: number; choiceCount?: number; gameMode?: "jayChou" | "tienFamily" }) => {
       socketRef.current?.emit("room:settings", settings);
     },
     []

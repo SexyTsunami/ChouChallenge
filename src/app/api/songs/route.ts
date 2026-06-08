@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { getJayChouTracks } from "@/lib/itunes";
+import { getJayChouSongList } from "@/lib/jayChouSongs";
 
 export async function GET() {
-  const tracks = getJayChouTracks();
+  const tracks = getJayChouSongList();
   return NextResponse.json({
     count: tracks.length,
     tracks: tracks.map(({ id, name }) => ({ id, name })),

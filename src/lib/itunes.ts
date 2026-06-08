@@ -1,5 +1,4 @@
-import type { SongChoice, TrackInfo } from "@/types/game";
-import { getJayChouSongList } from "./jayChouSongs";
+import type { GameMode, SongChoice, TrackInfo } from "@/types/game";
 
 const ITUNES_API = "https://itunes.apple.com/search";
 
@@ -57,9 +56,7 @@ const previewCache = new Map<string, CachedPreview>();
 
 export const SNIPPET_DURATION_SEC = 3;
 
-export function getJayChouTracks(): TrackInfo[] {
-  return getJayChouSongList();
-}
+export type CatalogMode = GameMode;
 
 function isLiveRecording(result: ItunesResult): boolean {
   const text = `${result.trackName ?? ""} ${result.collectionName ?? ""}`;
@@ -89,6 +86,56 @@ function normalizeEnglish(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function primaryArtist(value: string): string {
+  return normalizeEnglish(value).split(/\s+feat|\s+with| and |,|&/)[0]?.trim() ?? "";
+}
+
+function scoreArtistMatch(resultArtist: string, expectedArtist: string): number {
+  const result = normalizeEnglish(resultArtist);
+  const expected = normalizeEnglish(expectedArtist);
+  if (!result || !expected) return 0;
+  if (result === expected) return 100;
+
+  const resultPrimary = primaryArtist(resultArtist);
+  const expectedPrimary = primaryArtist(expectedArtist);
+  if (resultPrimary && expectedPrimary) {
+    if (result.includes(expectedPrimary) || expected.includes(resultPrimary)) return 90;
+    const words = expectedPrimary.split(" ").filter((w) => w.length > 2);
+    if (words.length > 0 && words.every((w) => result.includes(w))) return 80;
+  }
+
+  return 0;
+}
+
+function scoreTitleMatch(resultTitle: string, trackTitle: string): number {
+  const trackName = resultTitle.trim();
+  if (!trackName) return 0;
+
+  if (trackName === trackTitle) return 100;
+
+  const normalizedResult = normalizeEnglish(trackName);
+  const normalizedTitle = normalizeEnglish(trackTitle);
+  if (!normalizedTitle) return 0;
+  if (normalizedResult === normalizedTitle) return 100;
+  if (normalizedResult.includes(normalizedTitle) || normalizedTitle.includes(normalizedResult)) {
+    return 90;
+  }
+
+  const titleWords = normalizedTitle.split(" ").filter((w) => w.length > 3);
+  if (titleWords.length > 0 && titleWords.every((w) => normalizedResult.includes(w))) {
+    return 75;
+  }
+
+  return 0;
+}
+
+function scoreGenericMatch(result: ItunesResult, track: TrackInfo): number {
+  const titleScore = scoreTitleMatch(result.trackName ?? "", track.name);
+  const artistScore = scoreArtistMatch(result.artistName ?? "", track.english);
+  if (titleScore < MIN_MATCH_SCORE || artistScore < 50) return 0;
+  return Math.min(titleScore, artistScore === 100 ? titleScore : Math.max(artistScore, 70));
+}
+
 /** Score how well an iTunes result matches a specific catalog track (0–100). */
 function scoreItunesMatch(result: ItunesResult, track: TrackInfo): number {
   const trackName = (result.trackName ?? "").trim();
@@ -115,11 +162,13 @@ function scoreItunesMatch(result: ItunesResult, track: TrackInfo): number {
 /** Which catalog track does this iTunes result best correspond to? */
 function bestCatalogMatch(
   result: ItunesResult,
-  catalog: TrackInfo[]
+  catalog: TrackInfo[],
+  mode: CatalogMode
 ): { track: TrackInfo; score: number } | null {
+  const scoreFn = mode === "tienFamily" ? scoreGenericMatch : scoreItunesMatch;
   let best: { track: TrackInfo; score: number } | null = null;
   for (const track of catalog) {
-    const score = scoreItunesMatch(result, track);
+    const score = scoreFn(result, track);
     if (!best || score > best.score) {
       best = { track, score };
     }
@@ -130,14 +179,20 @@ function bestCatalogMatch(
 function pickValidatedResult(
   results: ItunesResult[],
   track: TrackInfo,
-  catalog: TrackInfo[]
+  catalog: TrackInfo[],
+  mode: CatalogMode
 ): ItunesResult | null {
+  const scoreFn = mode === "tienFamily" ? scoreGenericMatch : scoreItunesMatch;
+
   const ranked = results
-    .filter((r) => r.previewUrl && !isLiveRecording(r) && isJayChouRecording(r))
+    .filter((r) => {
+      if (!r.previewUrl || isLiveRecording(r) || isCoverOrTribute(r)) return false;
+      return mode === "tienFamily" ? true : isJayChouRecording(r);
+    })
     .map((r) => ({
       result: r,
-      score: scoreItunesMatch(r, track),
-      best: bestCatalogMatch(r, catalog),
+      score: scoreFn(r, track),
+      best: bestCatalogMatch(r, catalog, mode),
     }))
     .filter(
       (entry) =>
@@ -151,13 +206,27 @@ function pickValidatedResult(
   return ranked[0]?.result ?? null;
 }
 
-function buildSearchTerms(track: TrackInfo): string[] {
+function buildJayChouSearchTerms(track: TrackInfo): string[] {
   return [
     `Jay Chou ${track.name}`,
     `周杰伦 ${track.name}`,
     `${track.name} Jay Chou`,
     `Jay Chou ${track.english}`,
   ];
+}
+
+function buildGenericSearchTerms(track: TrackInfo): string[] {
+  return [
+    `${track.english} ${track.name}`,
+    `${track.name} ${track.english}`,
+    track.name,
+  ];
+}
+
+function buildSearchTerms(track: TrackInfo, mode: CatalogMode): string[] {
+  return mode === "tienFamily"
+    ? buildGenericSearchTerms(track)
+    : buildJayChouSearchTerms(track);
 }
 
 async function searchItunes(term: string): Promise<ItunesResult[]> {
@@ -210,31 +279,43 @@ export function randomSnippetParams(): { snippetStart: number; snippetDuration: 
   return { snippetStart, snippetDuration };
 }
 
-export async function fetchItunesPreview(
-  track: TrackInfo
-): Promise<{ previewUrl: string; artworkUrl: string } | null> {
-  const catalog = getJayChouSongList();
+function isCachedPreviewValid(
+  cached: CachedPreview,
+  track: TrackInfo,
+  mode: CatalogMode
+): boolean {
+  const cachedResult: ItunesResult = {
+    trackName: cached.itunesTrackName,
+    artistName: cached.itunesArtistName,
+  };
+  if (mode === "tienFamily") {
+    return scoreGenericMatch(cachedResult, track) >= MIN_MATCH_SCORE;
+  }
+  return (
+    isJayChouRecording(cachedResult) &&
+    scoreItunesMatch(cachedResult, track) >= MIN_MATCH_SCORE
+  );
+}
 
-  const cached = previewCache.get(track.id);
+export async function fetchItunesPreview(
+  track: TrackInfo,
+  catalog: TrackInfo[],
+  mode: CatalogMode = "jayChou"
+): Promise<{ previewUrl: string; artworkUrl: string } | null> {
+  const cacheKey = `${mode}:${track.id}`;
+  const cached = previewCache.get(cacheKey);
   if (cached) {
-    const cachedResult: ItunesResult = {
-      trackName: cached.itunesTrackName,
-      artistName: cached.itunesArtistName,
-    };
-    const stillValid =
-      isJayChouRecording(cachedResult) &&
-      scoreItunesMatch(cachedResult, track) >= MIN_MATCH_SCORE;
-    if (stillValid) {
+    if (isCachedPreviewValid(cached, track, mode)) {
       return { previewUrl: cached.previewUrl, artworkUrl: cached.artworkUrl };
     }
-    previewCache.delete(track.id);
+    previewCache.delete(cacheKey);
   }
 
   try {
     const seen = new Set<string>();
     const allResults: ItunesResult[] = [];
 
-    for (const term of buildSearchTerms(track)) {
+    for (const term of buildSearchTerms(track, mode)) {
       const results = await searchItunes(term);
       for (const r of results) {
         const key = r.previewUrl ?? `${r.trackName}-${r.collectionName}`;
@@ -245,10 +326,10 @@ export async function fetchItunesPreview(
       }
     }
 
-    const hit = pickValidatedResult(allResults, track, catalog);
+    const hit = pickValidatedResult(allResults, track, catalog, mode);
     if (!hit?.previewUrl) {
       console.warn(
-        `iTunes: no validated preview for "${track.name}" (${track.english}) — skipping`
+        `iTunes: no validated preview for "${track.name}" (${track.english}) [${mode}] — skipping`
       );
       return null;
     }
@@ -258,9 +339,9 @@ export async function fetchItunesPreview(
       previewUrl: hit.previewUrl,
       artworkUrl,
       itunesTrackName: hit.trackName ?? track.name,
-      itunesArtistName: hit.artistName ?? "Jay Chou",
+      itunesArtistName: hit.artistName ?? track.english,
     };
-    previewCache.set(track.id, entry);
+    previewCache.set(cacheKey, entry);
     return { previewUrl: entry.previewUrl, artworkUrl: entry.artworkUrl };
   } catch (err) {
     console.error(`iTunes fetch failed for "${track.name}":`, err);
@@ -270,11 +351,12 @@ export async function fetchItunesPreview(
 
 export async function pickTrackWithPreview(
   tracks: TrackInfo[],
+  mode: CatalogMode = "jayChou",
   maxAttempts = 12
 ): Promise<{ track: TrackInfo; previewUrl: string; artworkUrl: string } | null> {
   const pool = shuffle(tracks).slice(0, maxAttempts);
   for (const track of pool) {
-    const preview = await fetchItunesPreview(track);
+    const preview = await fetchItunesPreview(track, tracks, mode);
     if (preview) return { track, ...preview };
   }
   return null;

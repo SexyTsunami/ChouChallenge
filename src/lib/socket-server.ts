@@ -7,10 +7,10 @@ import {
 } from "./gameLogic";
 import {
   buildChoices,
-  getJayChouTracks,
   pickTrackWithPreview,
   randomSnippetParams,
 } from "./itunes";
+import { getTracksForMode } from "./tracks";
 import type {
   ClientRoomView,
   Player,
@@ -22,7 +22,9 @@ import {
   AUDIO_PLAY_DELAY_MS,
   AUDIO_SYNC_MAX_WAIT_MS,
   DEFAULT_CHOICES,
+  DEFAULT_GAME_MODE,
   DEFAULT_ROUNDS,
+  type GameMode,
   MAX_CHOICES,
   MAX_PLAYERS,
   MAX_ROUNDS,
@@ -35,15 +37,6 @@ const rooms = new Map<string, RoomState>();
 const playerToRoom = new Map<string, string>();
 const roundTimers = new Map<string, NodeJS.Timeout>();
 const audioSyncTimers = new Map<string, NodeJS.Timeout>();
-
-let cachedTracks: TrackInfo[] | null = null;
-
-function getTracks(): TrackInfo[] {
-  if (!cachedTracks || cachedTracks.length === 0) {
-    cachedTracks = getJayChouTracks();
-  }
-  return cachedTracks;
-}
 
 function getRoom(code: string): RoomState | undefined {
   return rooms.get(code.toUpperCase());
@@ -170,8 +163,8 @@ async function startNextRound(io: Server, code: string) {
   const room = getRoom(code);
   if (!room) return;
 
-  // Always use the full current catalog so choices and previews stay in sync.
-  const tracks = getTracks();
+  const gameMode = room.settings.gameMode ?? DEFAULT_GAME_MODE;
+  const tracks = getTracksForMode(gameMode);
   room.tracks = tracks;
 
   const choiceCount = room.settings.choiceCount ?? DEFAULT_CHOICES;
@@ -190,7 +183,7 @@ async function startNextRound(io: Server, code: string) {
 
   room.currentRound += 1;
 
-  const resolved = await pickTrackWithPreview(tracks);
+  const resolved = await pickTrackWithPreview(tracks, gameMode);
   if (!resolved) {
     const host = room.players.find((p) => p.id === room.hostId);
     if (host) {
@@ -286,7 +279,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         code = generateRoomCode();
       }
 
-      const tracks = getTracks();
+      const tracks = getTracksForMode(DEFAULT_GAME_MODE);
 
       const player: Player = {
         id: playerId,
@@ -301,7 +294,11 @@ export function initSocketServer(httpServer: HttpServer): Server {
         code,
         hostId: playerId,
         players: [player],
-        settings: { rounds: DEFAULT_ROUNDS, choiceCount: DEFAULT_CHOICES },
+        settings: {
+          rounds: DEFAULT_ROUNDS,
+          choiceCount: DEFAULT_CHOICES,
+          gameMode: DEFAULT_GAME_MODE,
+        },
         phase: "lobby",
         currentRound: 0,
         tracks,
@@ -365,7 +362,15 @@ export function initSocketServer(httpServer: HttpServer): Server {
 
     socket.on(
       "room:settings",
-      ({ rounds, choiceCount }: { rounds?: number; choiceCount?: number }) => {
+      ({
+        rounds,
+        choiceCount,
+        gameMode,
+      }: {
+        rounds?: number;
+        choiceCount?: number;
+        gameMode?: GameMode;
+      }) => {
         if (!currentPlayerId) return;
         const roomCode = playerToRoom.get(currentPlayerId);
         if (!roomCode) return;
@@ -380,6 +385,10 @@ export function initSocketServer(httpServer: HttpServer): Server {
             MAX_CHOICES,
             Math.max(MIN_CHOICES, choiceCount)
           );
+        }
+        if (gameMode !== undefined && (gameMode === "jayChou" || gameMode === "tienFamily")) {
+          room.settings.gameMode = gameMode;
+          room.tracks = getTracksForMode(gameMode);
         }
         broadcastRoom(io, room);
       }
@@ -487,4 +496,4 @@ export function initSocketServer(httpServer: HttpServer): Server {
   return io;
 }
 
-export { rooms, getTracks };
+export { rooms };

@@ -7,10 +7,14 @@ export interface Player {
   socketId: string;
 }
 
+export type GameMode = "jayChou" | "tienFamily";
+
 export interface RoomSettings {
   rounds: number;
   /** Number of multiple-choice options per round (4–8). */
   choiceCount: number;
+  /** Song catalog — Jay Chou discography or Tien family playlist. */
+  gameMode: GameMode;
 }
 
 export interface TrackInfo {
@@ -100,6 +104,7 @@ export const DEFAULT_ROUNDS = 5;
 export const MIN_CHOICES = 4;
 export const MAX_CHOICES = 8;
 export const DEFAULT_CHOICES = 8;
+export const DEFAULT_GAME_MODE: GameMode = "jayChou";
 export const ROUND_TIMER_SECONDS = 15;
 export const SNIPPET_LOOPS = 3;
 export const LOOP_PAUSE_MS = 400;

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ClientRoomView } from "@/types/game";
+import { DEFAULT_GAME_MODE } from "@/types/game";
 import SnippetPlayer from "./SnippetPlayer";
 import RoundTimer from "./RoundTimer";
 
@@ -14,6 +15,7 @@ interface GameScreenProps {
 
 export default function GameScreen({ room, playerId, onVote, onAudioReady }: GameScreenProps) {
   const round = room.round!;
+  const isTienFamily = (room.settings.gameMode ?? DEFAULT_GAME_MODE) === "tienFamily";
   const [selected, setSelected] = useState<number | null>(
     round.hasVoted ? round.myVote : null
   );
@@ -32,7 +34,9 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
         <p className="text-gray-400 text-xs">
           Round {round.roundNumber} of {room.settings.rounds}
         </p>
-        <h1 className="font-display text-lg font-bold leading-tight">What song is this?</h1>
+        <h1 className="font-display text-lg font-bold leading-tight">
+          {isTienFamily ? "What song is this?" : "What Jay Chou song is this?"}
+        </h1>
       </header>
 
       <div className="shrink-0">

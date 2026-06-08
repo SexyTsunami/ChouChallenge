@@ -2,14 +2,17 @@
 
 import type { ClientRoomView } from "@/types/game";
 import {
+  DEFAULT_CHOICES,
+  DEFAULT_GAME_MODE,
   MAX_CHOICES,
   MAX_PLAYERS,
   MAX_ROUNDS,
   MIN_CHOICES,
   MIN_ROUNDS,
-  DEFAULT_CHOICES,
   PLACEMENT_POINTS,
 } from "@/types/game";
+import { unlockAudioSession } from "@/lib/audioUnlock";
+import { getGameModeLabel } from "@/lib/tracks";
 
 const ORDINAL_WORDS = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"];
 
@@ -17,7 +20,11 @@ interface LobbyScreenProps {
   room: ClientRoomView;
   playerId: string;
   onReady: (ready: boolean) => void;
-  onSettings: (settings: { rounds?: number; choiceCount?: number }) => void;
+  onSettings: (settings: {
+    rounds?: number;
+    choiceCount?: number;
+    gameMode?: "jayChou" | "tienFamily";
+  }) => void;
   onStart: () => void;
 }
 
@@ -33,6 +40,8 @@ export default function LobbyScreen({
   const allReady = room.players.length >= 1 && room.players.every((p) => p.isReady);
   const canStart = isHost && allReady && room.players.length >= 1;
   const choiceCount = room.settings.choiceCount ?? DEFAULT_CHOICES;
+  const gameMode = room.settings.gameMode ?? DEFAULT_GAME_MODE;
+  const isTienFamily = gameMode === "tienFamily";
 
   return (
     <main className="min-h-dvh px-4 py-6 max-w-lg mx-auto">
@@ -43,6 +52,9 @@ export default function LobbyScreen({
         </p>
         <p className="text-gray-500 text-sm mt-2">
           Share this code with friends ({room.players.length}/{MAX_PLAYERS})
+        </p>
+        <p className="text-vinyl-accent/90 text-xs mt-3 font-medium">
+          {getGameModeLabel(gameMode)}
         </p>
       </header>
 
@@ -125,6 +137,38 @@ export default function LobbyScreen({
             />
             <span className="font-mono text-xl w-8 text-center">{choiceCount}</span>
           </div>
+          <div className="mt-5 pt-5 border-t border-vinyl-border">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium leading-snug">
+                  Tien Family Favorites Challenge
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {isTienFamily
+                    ? "Portland2023 playlist · 30 family favorites"
+                    : "Jay Chou discography (default)"}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isTienFamily}
+                aria-label="Tien Family Favorites Challenge"
+                onClick={() =>
+                  onSettings({ gameMode: isTienFamily ? "jayChou" : "tienFamily" })
+                }
+                className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${
+                  isTienFamily ? "bg-vinyl-accent" : "bg-vinyl-card border border-vinyl-border"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                    isTienFamily ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
         </section>
       )}
 
@@ -135,13 +179,23 @@ export default function LobbyScreen({
               ? "bg-vinyl-card border border-vinyl-accent text-vinyl-accent"
               : "btn-primary"
           }`}
-          onClick={() => onReady(!me?.isReady)}
+          onClick={() => {
+            void unlockAudioSession();
+            onReady(!me?.isReady);
+          }}
         >
           {me?.isReady ? "Cancel Ready" : "Ready"}
         </button>
 
         {isHost && (
-          <button className="btn-primary w-full" disabled={!canStart} onClick={onStart}>
+          <button
+            className="btn-primary w-full"
+            disabled={!canStart}
+            onClick={() => {
+              void unlockAudioSession();
+              onStart();
+            }}
+          >
             {allReady ? "Start Game" : "Waiting for everyone to ready up…"}
           </button>
         )}
