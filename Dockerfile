@@ -22,7 +22,7 @@ RUN npm ci --omit=dev
 
 COPY --from=builder /app/.next ./.next
 COPY server.ts ./
-COPY next.config.ts ./
+COPY next.config.mjs ./
 COPY tsconfig.json ./
 COPY src ./src
 
