@@ -1,6 +1,26 @@
 import { PLACEMENT_POINTS } from "@/types/game";
 import type { Player, RoundResult, RoundState } from "@/types/game";
 
+export function isTieForFirst(players: Pick<Player, "score">[]): boolean {
+  if (players.length < 2) return false;
+  const maxScore = Math.max(...players.map((p) => p.score));
+  return players.filter((p) => p.score === maxScore).length > 1;
+}
+
+export function getSuddenDeathRoundNumber(
+  currentRound: number,
+  scheduledRounds: number
+): number {
+  return Math.max(1, currentRound - scheduledRounds);
+}
+
+export function getNextSuddenDeathRoundNumber(
+  currentRound: number,
+  scheduledRounds: number
+): number {
+  return currentRound - scheduledRounds + 1;
+}
+
 export function calculateRoundScores(
   round: RoundState,
   players: Player[]

@@ -77,6 +77,8 @@ export interface RoomState {
   settings: RoomSettings;
   phase: RoomPhase;
   currentRound: number;
+  /** Extra tiebreaker rounds until one player leads. */
+  suddenDeath: boolean;
   round?: RoundState;
   roundResult?: RoundResult;
   tracks: TrackInfo[];

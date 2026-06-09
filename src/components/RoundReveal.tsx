@@ -3,6 +3,11 @@
 import { useEffect } from "react";
 import Image from "next/image";
 import type { ClientRoomView } from "@/types/game";
+import {
+  getNextSuddenDeathRoundNumber,
+  getSuddenDeathRoundNumber,
+  isTieForFirst,
+} from "@/lib/gameLogic";
 
 interface RoundRevealProps {
   room: ClientRoomView;
@@ -40,7 +45,18 @@ function playSuccessChime() {
 
 export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRevealProps) {
   const result = room.roundResult!;
-  const isLastRound = room.currentRound >= room.settings.rounds;
+  const regularSeasonComplete = room.currentRound >= room.settings.rounds;
+  const tied = isTieForFirst(room.players);
+  const inSuddenDeath =
+    room.suddenDeath && room.currentRound > room.settings.rounds;
+  const needsSuddenDeath = regularSeasonComplete && tied;
+  const suddenDeathRound = inSuddenDeath
+    ? getSuddenDeathRoundNumber(room.currentRound, room.settings.rounds)
+    : 0;
+  const nextSuddenDeathRound = getNextSuddenDeathRoundNumber(
+    room.currentRound,
+    room.settings.rounds
+  );
   const myRanking = result.rankings.find((r) => r.playerId === playerId);
   const iGotItRight = myRanking?.correct ?? false;
 
@@ -93,9 +109,27 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
   return (
     <main className="min-h-dvh px-4 py-6 max-w-lg mx-auto flex flex-col gap-5">
       <header className="text-center">
-        <p className="text-vinyl-accent text-sm font-medium tracking-wide">
-          Round {result.roundNumber} Results
-        </p>
+        {inSuddenDeath ? (
+          <>
+            <p className="text-red-400 text-sm font-bold tracking-widest uppercase">
+              Sudden Death — Round {suddenDeathRound}
+            </p>
+            <p className="text-gray-400 text-xs mt-1">Tiebreaker results</p>
+          </>
+        ) : needsSuddenDeath ? (
+          <>
+            <p className="text-vinyl-accent text-sm font-medium tracking-wide">
+              Round {result.roundNumber} Results
+            </p>
+            <p className="text-red-400 text-xs font-semibold mt-2 uppercase tracking-wide">
+              Tie at the top — sudden death next!
+            </p>
+          </>
+        ) : (
+          <p className="text-vinyl-accent text-sm font-medium tracking-wide">
+            Round {result.roundNumber} Results
+          </p>
+        )}
       </header>
 
       <div className="flex flex-col items-center gap-3">
@@ -200,12 +234,21 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
       </section>
 
       {isHost ? (
-        <button className="btn-primary w-full" onClick={onNext}>
-          {isLastRound ? "See Final Results" : "Next Round"}
+        <button
+          className={`w-full ${needsSuddenDeath || (inSuddenDeath && tied) ? "bg-red-600 hover:bg-red-500 text-white font-semibold py-3 rounded-full transition-colors active:scale-95" : "btn-primary"}`}
+          onClick={onNext}
+        >
+          {needsSuddenDeath || (inSuddenDeath && tied)
+            ? `Sudden Death Round ${nextSuddenDeathRound}`
+            : regularSeasonComplete
+              ? "See Final Results"
+              : "Next Round"}
         </button>
       ) : (
         <p className="text-center text-gray-400 text-sm animate-pulse">
-          Waiting for host to continue…
+          {needsSuddenDeath || (inSuddenDeath && tied)
+            ? "Waiting for host to start sudden death…"
+            : "Waiting for host to continue…"}
         </p>
       )}
     </main>

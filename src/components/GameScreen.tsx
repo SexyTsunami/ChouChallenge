@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ClientRoomView } from "@/types/game";
 import { DEFAULT_GAME_MODE } from "@/types/game";
+import { getSuddenDeathRoundNumber } from "@/lib/gameLogic";
 import SnippetPlayer from "./SnippetPlayer";
 import RoundTimer from "./RoundTimer";
 
@@ -16,6 +17,12 @@ interface GameScreenProps {
 export default function GameScreen({ room, playerId, onVote, onAudioReady }: GameScreenProps) {
   const round = room.round!;
   const isTienFamily = (room.settings.gameMode ?? DEFAULT_GAME_MODE) === "tienFamily";
+  const inSuddenDeath =
+    room.suddenDeath && room.currentRound > room.settings.rounds;
+  const suddenDeathRound = getSuddenDeathRoundNumber(
+    room.currentRound,
+    room.settings.rounds
+  );
   const [selected, setSelected] = useState<number | null>(
     round.hasVoted ? round.myVote : null
   );
@@ -31,9 +38,18 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
   return (
     <main className="h-dvh overflow-hidden px-4 py-3 max-w-lg mx-auto flex flex-col gap-3">
       <header className="text-center shrink-0">
-        <p className="text-gray-400 text-xs">
-          Round {round.roundNumber} of {room.settings.rounds}
-        </p>
+        {inSuddenDeath ? (
+          <>
+            <p className="text-red-400 text-xs font-bold tracking-widest uppercase animate-pulse">
+              Sudden Death
+            </p>
+            <p className="text-gray-400 text-xs mt-1">Tiebreaker round {suddenDeathRound}</p>
+          </>
+        ) : (
+          <p className="text-gray-400 text-xs">
+            Round {round.roundNumber} of {room.settings.rounds}
+          </p>
+        )}
         <h1 className="font-display text-lg font-bold leading-tight">
           {isTienFamily ? "What song is this?" : "What Jay Chou song is this?"}
         </h1>

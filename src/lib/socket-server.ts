@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
   calculateRoundScores,
   generateRoomCode,
+  isTieForFirst,
 } from "./gameLogic";
 import {
   buildChoices,
@@ -51,6 +52,7 @@ function toClientView(room: RoomState, playerId: string): ClientRoomView {
     settings: room.settings,
     phase: room.phase,
     currentRound: room.currentRound,
+    suddenDeath: room.suddenDeath,
     tracks: room.tracks.map(({ id, name, english }) => ({ id, name, english })),
     roundResult: room.roundResult,
   };
@@ -301,6 +303,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         },
         phase: "lobby",
         currentRound: 0,
+        suddenDeath: false,
         tracks,
       };
 
@@ -412,6 +415,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         p.isReady = false;
       });
       room.currentRound = 0;
+      room.suddenDeath = false;
       await startNextRound(io, room.code);
     });
 
@@ -456,7 +460,15 @@ export function initSocketServer(httpServer: HttpServer): Server {
       if (!room || room.hostId !== currentPlayerId) return;
       if (room.phase !== "roundEnd") return;
 
-      if (room.currentRound >= room.settings.rounds) {
+      const regularSeasonComplete = room.currentRound >= room.settings.rounds;
+
+      if (regularSeasonComplete) {
+        if (isTieForFirst(room.players)) {
+          room.suddenDeath = true;
+          await startNextRound(io, room.code);
+          return;
+        }
+        room.suddenDeath = false;
         room.phase = "gameOver";
         room.roundResult = undefined;
         broadcastRoom(io, room);
@@ -477,6 +489,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
       clearAudioSyncTimer(roomCode);
       room.phase = "lobby";
       room.currentRound = 0;
+      room.suddenDeath = false;
       room.round = undefined;
       room.roundResult = undefined;
       room.players.forEach((p) => {
