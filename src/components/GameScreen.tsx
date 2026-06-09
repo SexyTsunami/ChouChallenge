@@ -44,6 +44,7 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
           previewUrl={round.previewUrl}
           snippetStart={round.snippetStart}
           snippetDuration={round.snippetDuration}
+          roundStartTime={round.roundStartTime}
           audioPlayAt={round.audioPlayAt}
           audioSyncing={round.audioSyncing}
           syncReadyCount={round.syncReadyCount}

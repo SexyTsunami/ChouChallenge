@@ -7,12 +7,15 @@ import {
   loadGameAudioSource,
   unlockGameAudio,
 } from "@/lib/gameAudio";
+import { useServerClockAnchor } from "@/hooks/useServerClockAnchor";
+import { msUntilServerTime } from "@/lib/serverClock";
 import { LOOP_PAUSE_MS, SNIPPET_LOOPS } from "@/types/game";
 
 interface SnippetPlayerProps {
   previewUrl: string;
   snippetStart: number;
   snippetDuration: number;
+  roundStartTime: number;
   audioPlayAt: number;
   audioSyncing?: boolean;
   syncReadyCount?: number;
@@ -33,6 +36,7 @@ export default function SnippetPlayer({
   previewUrl,
   snippetStart,
   snippetDuration,
+  roundStartTime,
   audioPlayAt,
   audioSyncing = false,
   syncReadyCount = 0,
@@ -50,6 +54,7 @@ export default function SnippetPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentLoop, setCurrentLoop] = useState(-1);
   const [playbackFailed, setPlaybackFailed] = useState(false);
+  const clockAnchor = useServerClockAnchor(roundStartTime);
 
   const clearAllTimeouts = useCallback(() => {
     timeoutsRef.current.forEach(clearTimeout);
@@ -149,7 +154,9 @@ export default function SnippetPlayer({
     playLoopRef.current = playLoop;
     clearAllTimeouts();
 
-    const delay = Math.max(0, audioPlayAt - Date.now());
+    const delay = clockAnchor
+      ? msUntilServerTime(clockAnchor, audioPlayAt)
+      : Math.max(0, audioPlayAt - Date.now());
     const startTimeout = setTimeout(() => {
       if (!isGameAudioUnlocked()) return;
       playLoop(loopIndexRef.current >= 0 ? loopIndexRef.current : 0);
@@ -160,7 +167,9 @@ export default function SnippetPlayer({
   }, [
     isLoaded,
     hasSynced,
+    roundStartTime,
     audioPlayAt,
+    clockAnchor,
     snippetStart,
     snippetDuration,
     onComplete,

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { elapsedServerSeconds } from "@/lib/serverClock";
+import { useServerClockAnchor } from "@/hooks/useServerClockAnchor";
 
 interface RoundTimerProps {
   timerSeconds: number;
@@ -15,19 +17,20 @@ export default function RoundTimer({
 }: RoundTimerProps) {
   const [remaining, setRemaining] = useState(timerSeconds);
   const expiredRef = useRef(false);
+  const anchor = useServerClockAnchor(roundStartTime);
 
   const syncing = roundStartTime <= 0;
 
   useEffect(() => {
     expiredRef.current = false;
 
-    if (syncing) {
+    if (syncing || !anchor) {
       setRemaining(timerSeconds);
       return;
     }
 
     const tick = () => {
-      const elapsed = (Date.now() - roundStartTime) / 1000;
+      const elapsed = elapsedServerSeconds(anchor, roundStartTime);
       const left = Math.max(0, timerSeconds - elapsed);
       setRemaining(Math.ceil(left));
       if (left <= 0 && !expiredRef.current) {
@@ -39,7 +42,7 @@ export default function RoundTimer({
     tick();
     const interval = setInterval(tick, 200);
     return () => clearInterval(interval);
-  }, [timerSeconds, roundStartTime, onExpire, syncing]);
+  }, [timerSeconds, roundStartTime, onExpire, syncing, anchor]);
 
   const pct = syncing ? 100 : (remaining / timerSeconds) * 100;
   const urgent = !syncing && remaining <= 5;
