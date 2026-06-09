@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  isAudioSessionUnlocked,
-  isTouchDevice,
-  unlockAudioSession,
-} from "@/lib/audioUnlock";
+  getSharedAudio,
+  isGameAudioUnlocked,
+  loadGameAudioSource,
+  unlockGameAudio,
+} from "@/lib/gameAudio";
 import { LOOP_PAUSE_MS, SNIPPET_LOOPS } from "@/types/game";
 
 interface SnippetPlayerProps {
@@ -39,83 +40,56 @@ export default function SnippetPlayer({
   onAudioReady,
   onComplete,
 }: SnippetPlayerProps) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
   const readySignaledRef = useRef(false);
   const loopIndexRef = useRef(0);
   const playLoopRef = useRef<(loopIndex: number) => void>(() => {});
 
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasSynced, setHasSynced] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentLoop, setCurrentLoop] = useState(-1);
-  const [needsUnlock, setNeedsUnlock] = useState(false);
-  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [playbackFailed, setPlaybackFailed] = useState(false);
 
   const clearAllTimeouts = useCallback(() => {
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
   }, []);
 
-  const signalReady = useCallback(async () => {
+  const signalSynced = useCallback(() => {
     if (readySignaledRef.current) return;
-
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (isTouchDevice() && !isAudioSessionUnlocked()) {
-      setNeedsUnlock(true);
-      return;
-    }
-
-    const unlocked = await unlockAudioSession(audio);
-    if (!unlocked) {
-      setNeedsUnlock(true);
-      return;
-    }
-
     readySignaledRef.current = true;
-    setNeedsUnlock(false);
+    setHasSynced(true);
+    setPlaybackFailed(false);
     onAudioReady?.();
   }, [onAudioReady]);
 
-  const handleUnlockTap = useCallback(async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const unlocked = await unlockAudioSession(audio);
-    if (!unlocked) return;
-
-    setNeedsUnlock(false);
-    setAutoplayBlocked(false);
-
-    if (!readySignaledRef.current) {
-      readySignaledRef.current = true;
-      onAudioReady?.();
+  /** Every player (host + mobile) must tap so nobody gets a head start. */
+  const handleSyncTap = useCallback(async () => {
+    const unlocked = await unlockGameAudio();
+    if (!unlocked) {
+      setPlaybackFailed(true);
+      return;
     }
-
+    signalSynced();
     if (audioPlayAt > 0 && !isPlaying) {
-      playLoopRef.current(loopIndexRef.current);
+      playLoopRef.current(loopIndexRef.current >= 0 ? loopIndexRef.current : 0);
     }
-  }, [audioPlayAt, isPlaying, onAudioReady]);
+  }, [audioPlayAt, isPlaying, signalSynced]);
 
-  // Preload audio; defer server "ready" until mobile audio is unlocked.
+  // Preload into the shared session audio element (no server signal until tap).
   useEffect(() => {
     readySignaledRef.current = false;
     loopIndexRef.current = 0;
     setIsLoaded(false);
+    setHasSynced(false);
     setIsPlaying(false);
     setCurrentLoop(-1);
-    setNeedsUnlock(false);
-    setAutoplayBlocked(false);
+    setPlaybackFailed(false);
 
-    const audio = new Audio(previewUrl);
-    audio.preload = "auto";
-    audioRef.current = audio;
+    const audio = loadGameAudioSource(previewUrl);
 
-    const onCanPlay = () => {
-      setIsLoaded(true);
-      void signalReady();
-    };
+    const onCanPlay = () => setIsLoaded(true);
 
     audio.addEventListener("canplaythrough", onCanPlay);
     if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
@@ -126,15 +100,14 @@ export default function SnippetPlayer({
       audio.removeEventListener("canplaythrough", onCanPlay);
       clearAllTimeouts();
       audio.pause();
-      audio.src = "";
-      audioRef.current = null;
     };
-  }, [previewUrl, signalReady, clearAllTimeouts]);
+  }, [previewUrl, clearAllTimeouts]);
 
   // Start synced playback once the server sets audioPlayAt.
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !isLoaded || audioPlayAt <= 0) return;
+    if (!isLoaded || !hasSynced || audioPlayAt <= 0) return;
+
+    const audio = getSharedAudio();
 
     const playLoop = (loopIndex: number) => {
       loopIndexRef.current = loopIndex;
@@ -150,13 +123,13 @@ export default function SnippetPlayer({
       audio
         .play()
         .then(() => {
-          setAutoplayBlocked(false);
+          setPlaybackFailed(false);
           setIsPlaying(true);
         })
         .catch((err) => {
           console.error("audio.play() failed:", err);
           setIsPlaying(false);
-          setAutoplayBlocked(true);
+          setPlaybackFailed(true);
         });
 
       const stopTimeout = setTimeout(() => {
@@ -178,23 +151,35 @@ export default function SnippetPlayer({
 
     const delay = Math.max(0, audioPlayAt - Date.now());
     const startTimeout = setTimeout(() => {
-      if (!isAudioSessionUnlocked()) return;
+      if (!isGameAudioUnlocked()) return;
       playLoop(loopIndexRef.current >= 0 ? loopIndexRef.current : 0);
     }, delay);
     timeoutsRef.current.push(startTimeout);
 
     return clearAllTimeouts;
-  }, [isLoaded, audioPlayAt, snippetStart, snippetDuration, onComplete, clearAllTimeouts]);
+  }, [
+    isLoaded,
+    hasSynced,
+    audioPlayAt,
+    snippetStart,
+    snippetDuration,
+    onComplete,
+    clearAllTimeouts,
+  ]);
 
-  const awaitingTap = needsUnlock || autoplayBlocked;
-  const showLoading = !isLoaded || (audioSyncing && !awaitingTap);
+  const awaitingSync = isLoaded && !hasSynced;
+  const needsRetry = playbackFailed;
+  const showTapPrompt = awaitingSync || needsRetry;
+  const showLoading = !isLoaded;
 
-  const statusText = awaitingTap
-    ? "Tap to enable audio"
-    : !isLoaded
+  const statusText = showTapPrompt
+    ? needsRetry
+      ? "Tap to re-sync audio"
+      : `Tap to sync (${syncReadyCount}/${syncTotalPlayers})`
+    : showLoading
       ? "Loading preview…"
       : audioSyncing
-        ? `Syncing players… (${syncReadyCount}/${syncTotalPlayers})`
+        ? `Waiting for players… (${syncReadyCount}/${syncTotalPlayers})`
         : isPlaying
           ? "Now Playing"
           : currentLoop === -1
@@ -207,13 +192,17 @@ export default function SnippetPlayer({
         <div className="relative flex-shrink-0">
           <div
             className={`w-3 h-3 rounded-full transition-colors duration-300 ${
-              isPlaying ? "bg-vinyl-accent" : showLoading ? "bg-amber-400" : awaitingTap ? "bg-amber-400" : "bg-gray-600"
+              isPlaying
+                ? "bg-vinyl-accent"
+                : showLoading || showTapPrompt
+                  ? "bg-amber-400"
+                  : "bg-gray-600"
             }`}
           />
           {isPlaying && (
             <span className="absolute inset-0 rounded-full bg-vinyl-accent animate-ping opacity-60" />
           )}
-          {(showLoading || awaitingTap) && !isPlaying && (
+          {(showLoading || showTapPrompt) && !isPlaying && (
             <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-40" />
           )}
         </div>
@@ -225,11 +214,13 @@ export default function SnippetPlayer({
               className={`w-1.5 rounded-sm origin-bottom transition-colors duration-300 ${
                 isPlaying
                   ? `bg-vinyl-accent ${anim}`
-                  : showLoading || awaitingTap
+                  : showLoading || showTapPrompt
                     ? "bg-amber-400/70"
                     : "bg-gray-600"
               }`}
-              style={{ height: isPlaying ? "24px" : showLoading || awaitingTap ? "12px" : "3px" }}
+              style={{
+                height: isPlaying ? "24px" : showLoading || showTapPrompt ? "12px" : "3px",
+              }}
             />
           ))}
         </div>
@@ -238,7 +229,7 @@ export default function SnippetPlayer({
           className={`text-xs font-medium tracking-wide transition-colors duration-300 ${
             isPlaying
               ? "text-vinyl-accent"
-              : showLoading || awaitingTap
+              : showLoading || showTapPrompt
                 ? "text-amber-400"
                 : "text-gray-500"
           }`}
@@ -265,25 +256,27 @@ export default function SnippetPlayer({
       </div>
 
       <p className="text-xs text-gray-500 text-center max-w-xs">
-        {awaitingTap
-          ? "Your browser needs a tap before snippets can play. Tap the player above."
+        {showTapPrompt
+          ? "Everyone taps — snippets start together once all players are synced."
           : showLoading
-            ? "Please wait — everyone hears the snippets together"
-            : currentLoop >= 0
-              ? `Loop ${Math.min(currentLoop + 1, SNIPPET_LOOPS)} of ${SNIPPET_LOOPS}`
-              : "Listen closely…"}
+            ? "Loading preview for this round…"
+            : audioSyncing
+              ? "Almost there — snippets start in a moment"
+              : currentLoop >= 0
+                ? `Loop ${Math.min(currentLoop + 1, SNIPPET_LOOPS)} of ${SNIPPET_LOOPS}`
+                : "Listen closely…"}
       </p>
     </>
   );
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {awaitingTap ? (
+      {showTapPrompt ? (
         <button
           type="button"
-          onClick={() => void handleUnlockTap()}
+          onClick={() => void handleSyncTap()}
           className="flex flex-col items-center gap-4 w-full touch-manipulation active:opacity-90"
-          aria-label="Tap to enable audio"
+          aria-label="Tap to sync audio with group"
         >
           {playerContent}
         </button>
