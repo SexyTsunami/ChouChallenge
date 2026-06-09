@@ -5,7 +5,10 @@ import {
   getSharedAudio,
   isGameAudioUnlocked,
   loadGameAudioSource,
-  unlockGameAudio,
+  markSessionLocked,
+  markSessionUnlocked,
+  playPreviewInUserGesture,
+  primeAudioInUserGesture,
 } from "@/lib/gameAudio";
 import { useServerClockAnchor } from "@/hooks/useServerClockAnchor";
 import { msUntilServerTime } from "@/lib/serverClock";
@@ -69,20 +72,53 @@ export default function SnippetPlayer({
     onAudioReady?.();
   }, [onAudioReady]);
 
-  /** Every player (host + mobile) must tap so nobody gets a head start. */
-  const handleSyncTap = useCallback(async () => {
-    const unlocked = await unlockGameAudio();
-    if (!unlocked) {
+  const startSnippetLoops = useCallback(() => {
+    playLoopRef.current(loopIndexRef.current >= 0 ? loopIndexRef.current : 0);
+  }, []);
+
+  /**
+   * Must stay synchronous at the start — iOS only allows play() inside the tap handler.
+   */
+  const handleSyncTap = useCallback(() => {
+    primeAudioInUserGesture();
+
+    const audio = loadGameAudioSource(previewUrl);
+    const playPromise = playPreviewInUserGesture(audio, snippetStart);
+
+    if (!playPromise) {
+      markSessionLocked();
       setPlaybackFailed(true);
       return;
     }
-    signalSynced();
-    if (audioPlayAt > 0 && !isPlaying) {
-      playLoopRef.current(loopIndexRef.current >= 0 ? loopIndexRef.current : 0);
-    }
-  }, [audioPlayAt, isPlaying, signalSynced]);
 
-  // Preload into the shared session audio element (no server signal until tap).
+    playPromise
+      .then(() => {
+        audio.pause();
+        audio.currentTime = snippetStart;
+        markSessionUnlocked();
+        setPlaybackFailed(false);
+        signalSynced();
+
+        const snippetsShouldStart = audioPlayAt > 0 && Date.now() >= audioPlayAt - 250;
+        if (snippetsShouldStart && !isPlaying) {
+          startSnippetLoops();
+        }
+      })
+      .catch((err) => {
+        console.error("iOS audio unlock failed:", err);
+        markSessionLocked();
+        setPlaybackFailed(true);
+      });
+  }, [
+    previewUrl,
+    snippetStart,
+    audioPlayAt,
+    isPlaying,
+    signalSynced,
+    startSnippetLoops,
+  ]);
+
+  // Preload into the shared session audio element (server signal waits for tap).
   useEffect(() => {
     readySignaledRef.current = false;
     loopIndexRef.current = 0;
@@ -95,14 +131,24 @@ export default function SnippetPlayer({
     const audio = loadGameAudioSource(previewUrl);
 
     const onCanPlay = () => setIsLoaded(true);
+    const onError = () => setIsLoaded(false);
 
+    // iOS Safari often fires `canplay` but not `canplaythrough` for remote previews.
     audio.addEventListener("canplaythrough", onCanPlay);
+    audio.addEventListener("canplay", onCanPlay);
+    audio.addEventListener("loadeddata", onCanPlay);
+    audio.addEventListener("error", onError);
     if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      onCanPlay();
+    } else if (audio.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
       onCanPlay();
     }
 
     return () => {
       audio.removeEventListener("canplaythrough", onCanPlay);
+      audio.removeEventListener("canplay", onCanPlay);
+      audio.removeEventListener("loadeddata", onCanPlay);
+      audio.removeEventListener("error", onError);
       clearAllTimeouts();
       audio.pause();
     };
@@ -125,9 +171,20 @@ export default function SnippetPlayer({
 
       setCurrentLoop(loopIndex);
       audio.currentTime = snippetStart;
-      audio
-        .play()
-        .then(() => {
+
+      let playPromise: Promise<void> | undefined;
+      try {
+        playPromise = audio.play();
+      } catch (err) {
+        console.error("audio.play() failed:", err);
+        setIsPlaying(false);
+        setPlaybackFailed(true);
+        markSessionLocked();
+        return;
+      }
+
+      playPromise
+        ?.then(() => {
           setPlaybackFailed(false);
           setIsPlaying(true);
         })
@@ -135,6 +192,7 @@ export default function SnippetPlayer({
           console.error("audio.play() failed:", err);
           setIsPlaying(false);
           setPlaybackFailed(true);
+          markSessionLocked();
         });
 
       const stopTimeout = setTimeout(() => {
@@ -183,7 +241,7 @@ export default function SnippetPlayer({
 
   const statusText = showTapPrompt
     ? needsRetry
-      ? "Tap to re-sync audio"
+      ? "Tap to sync audio"
       : `Tap to sync (${syncReadyCount}/${syncTotalPlayers})`
     : showLoading
       ? "Loading preview…"
@@ -283,7 +341,7 @@ export default function SnippetPlayer({
       {showTapPrompt ? (
         <button
           type="button"
-          onClick={() => void handleSyncTap()}
+          onClick={handleSyncTap}
           className="flex flex-col items-center gap-4 w-full touch-manipulation active:opacity-90"
           aria-label="Tap to sync audio with group"
         >

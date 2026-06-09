@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { unlockGameAudio } from "@/lib/gameAudio";
+import { primeAudioInUserGesture } from "@/lib/gameAudio";
 import VinylRecord from "./VinylRecord";
 
 interface StartScreenProps {
@@ -80,7 +80,7 @@ export default function StartScreen({
                 className="btn-primary w-full"
                 disabled={!canAct}
                 onClick={() => {
-                  void unlockGameAudio();
+                  primeAudioInUserGesture();
                   onCreate(nickname.trim());
                 }}
               >
@@ -108,7 +108,7 @@ export default function StartScreen({
                 className="btn-primary w-full"
                 disabled={!canAct || roomCode.length < 4}
                 onClick={() => {
-                  void unlockGameAudio();
+                  primeAudioInUserGesture();
                   onJoin(nickname.trim(), roomCode);
                 }}
               >

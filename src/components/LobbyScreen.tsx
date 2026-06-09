@@ -11,7 +11,7 @@ import {
   MIN_ROUNDS,
   PLACEMENT_POINTS,
 } from "@/types/game";
-import { unlockGameAudio } from "@/lib/gameAudio";
+import { primeAudioInUserGesture } from "@/lib/gameAudio";
 import { getGameModeLabel } from "@/lib/tracks";
 
 const ORDINAL_WORDS = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"];
@@ -180,7 +180,7 @@ export default function LobbyScreen({
               : "btn-primary"
           }`}
           onClick={() => {
-            void unlockGameAudio();
+            primeAudioInUserGesture();
             onReady(!me?.isReady);
           }}
         >
@@ -192,7 +192,7 @@ export default function LobbyScreen({
             className="btn-primary w-full"
             disabled={!canStart}
             onClick={() => {
-              void unlockGameAudio();
+              primeAudioInUserGesture();
               onStart();
             }}
           >
