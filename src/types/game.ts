@@ -7,13 +7,13 @@ export interface Player {
   socketId: string;
 }
 
-export type GameMode = "jayChou" | "tienFamily";
+export type GameMode = "jayChou" | "tienFamily" | "dantonFavorites";
 
 export interface RoomSettings {
   rounds: number;
   /** Number of multiple-choice options per round (4–8). */
   choiceCount: number;
-  /** Song catalog — Jay Chou discography or Tien family playlist. */
+  /** Song catalog — Jay Chou, Tien family, or Danton favorites (one at a time). */
   gameMode: GameMode;
 }
 

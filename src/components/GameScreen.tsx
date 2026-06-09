@@ -16,7 +16,8 @@ interface GameScreenProps {
 
 export default function GameScreen({ room, playerId, onVote, onAudioReady }: GameScreenProps) {
   const round = room.round!;
-  const isTienFamily = (room.settings.gameMode ?? DEFAULT_GAME_MODE) === "tienFamily";
+  const gameMode = room.settings.gameMode ?? DEFAULT_GAME_MODE;
+  const isPlaylistMode = gameMode !== "jayChou";
   const inSuddenDeath =
     room.suddenDeath && room.currentRound > room.settings.rounds;
   const suddenDeathRound = getSuddenDeathRoundNumber(
@@ -51,7 +52,7 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
           </p>
         )}
         <h1 className="font-display text-lg font-bold leading-tight">
-          {isTienFamily ? "What song is this?" : "What Jay Chou song is this?"}
+          {isPlaylistMode ? "What song is this?" : "What Jay Chou song is this?"}
         </h1>
       </header>
 

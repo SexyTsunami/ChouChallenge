@@ -23,9 +23,10 @@ interface LobbyScreenProps {
   onSettings: (settings: {
     rounds?: number;
     choiceCount?: number;
-    gameMode?: "jayChou" | "tienFamily";
+    gameMode?: "jayChou" | "tienFamily" | "dantonFavorites";
   }) => void;
   onStart: () => void;
+  onLeave: () => void;
 }
 
 export default function LobbyScreen({
@@ -34,6 +35,7 @@ export default function LobbyScreen({
   onReady,
   onSettings,
   onStart,
+  onLeave,
 }: LobbyScreenProps) {
   const me = room.players.find((p) => p.id === playerId);
   const isHost = me?.isHost ?? false;
@@ -42,10 +44,19 @@ export default function LobbyScreen({
   const choiceCount = room.settings.choiceCount ?? DEFAULT_CHOICES;
   const gameMode = room.settings.gameMode ?? DEFAULT_GAME_MODE;
   const isTienFamily = gameMode === "tienFamily";
+  const isDanton = gameMode === "dantonFavorites";
 
   return (
-    <main className="min-h-dvh px-4 py-6 max-w-lg mx-auto">
-      <header className="text-center mb-8">
+    <main className="min-h-dvh px-4 py-6 max-w-lg mx-auto relative">
+      <button
+        type="button"
+        onClick={onLeave}
+        className="apple-back-button absolute top-5 left-4 z-20"
+      >
+        ← Back
+      </button>
+
+      <header className="text-center mb-8 pt-10">
         <p className="text-gray-400 text-sm">Room Code</p>
         <p className="font-mono text-4xl font-bold tracking-[0.3em] text-vinyl-accent">
           {room.code}
@@ -137,7 +148,8 @@ export default function LobbyScreen({
             />
             <span className="font-mono text-xl w-8 text-center">{choiceCount}</span>
           </div>
-          <div className="mt-5 pt-5 border-t border-vinyl-border">
+          <div className="mt-5 pt-5 border-t border-vinyl-border space-y-4">
+            <p className="text-xs text-gray-500">Playlist mode — only one can be active</p>
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-sm font-medium leading-snug">
@@ -146,7 +158,9 @@ export default function LobbyScreen({
                 <p className="text-xs text-gray-500 mt-1">
                   {isTienFamily
                     ? "Kid's Faves for Game · 30 songs"
-                    : "Jay Chou discography (default)"}
+                    : isDanton
+                      ? "Off — Danton's playlist is active"
+                      : "Jay Chou discography (default)"}
                 </p>
               </div>
               <button
@@ -164,6 +178,38 @@ export default function LobbyScreen({
                 <span
                   className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
                     isTienFamily ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium leading-snug">
+                  Danton&apos;s Favorites Challenge
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {isDanton
+                    ? "Danton's playlist · 50 songs"
+                    : isTienFamily
+                      ? "Off — Tien Family playlist is active"
+                      : "Jay Chou discography (default)"}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isDanton}
+                aria-label="Danton's Favorites Challenge"
+                onClick={() =>
+                  onSettings({ gameMode: isDanton ? "jayChou" : "dantonFavorites" })
+                }
+                className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${
+                  isDanton ? "bg-vinyl-accent" : "bg-vinyl-card border border-vinyl-border"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                    isDanton ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>

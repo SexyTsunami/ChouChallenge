@@ -23,6 +23,7 @@ export default function HomePage() {
     signalAudioReady,
     nextRound,
     returnToLobby,
+    leaveRoom,
   } = useGameSocket();
 
   if (!room || !playerId) {
@@ -49,6 +50,7 @@ export default function HomePage() {
           onReady={setReady}
           onSettings={updateSettings}
           onStart={startGame}
+          onLeave={leaveRoom}
         />
       );
 

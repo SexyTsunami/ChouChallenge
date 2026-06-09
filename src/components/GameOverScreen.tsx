@@ -77,6 +77,9 @@ export default function GameOverScreen({
       ) : (
         <p className="text-gray-400 text-sm text-center animate-pulse">
           Waiting for host to return to lobby…
+          <span className="block text-xs text-gray-500 mt-1">
+            Same room code — everyone can ready up and play again.
+          </span>
         </p>
       )}
 

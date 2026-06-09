@@ -256,6 +256,9 @@ function removePlayer(io: Server, playerId: string) {
   }
 
   if (room.hostId === playerId) {
+    room.players.forEach((p) => {
+      p.isHost = false;
+    });
     room.hostId = room.players[0].id;
     room.players[0].isHost = true;
   }
@@ -389,7 +392,10 @@ export function initSocketServer(httpServer: HttpServer): Server {
             Math.max(MIN_CHOICES, choiceCount)
           );
         }
-        if (gameMode !== undefined && (gameMode === "jayChou" || gameMode === "tienFamily")) {
+        if (
+          gameMode !== undefined &&
+          (gameMode === "jayChou" || gameMode === "tienFamily" || gameMode === "dantonFavorites")
+        ) {
           room.settings.gameMode = gameMode;
           room.tracks = getTracksForMode(gameMode);
         }
@@ -484,6 +490,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
       if (!roomCode) return;
       const room = getRoom(roomCode);
       if (!room || room.hostId !== currentPlayerId) return;
+      if (room.phase !== "gameOver") return;
 
       clearRoundTimer(roomCode);
       clearAudioSyncTimer(roomCode);
@@ -497,6 +504,22 @@ export function initSocketServer(httpServer: HttpServer): Server {
         p.isReady = false;
       });
       broadcastRoom(io, room);
+    });
+
+    socket.on("room:leave", () => {
+      if (!currentPlayerId) return;
+      const roomCode = playerToRoom.get(currentPlayerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      if (!room || room.phase !== "lobby") {
+        socket.emit("error", { message: "You can only leave while in the lobby." });
+        return;
+      }
+
+      removePlayer(io, currentPlayerId);
+      socket.leave(roomCode);
+      currentPlayerId = null;
+      socket.emit("room:left");
     });
 
     socket.on("disconnect", () => {

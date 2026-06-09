@@ -58,6 +58,10 @@ export const SNIPPET_DURATION_SEC = 3;
 
 export type CatalogMode = GameMode;
 
+function isGenericCatalog(mode: CatalogMode): boolean {
+  return mode !== "jayChou";
+}
+
 function isLiveRecording(result: ItunesResult): boolean {
   const text = `${result.trackName ?? ""} ${result.collectionName ?? ""}`;
   return LIVE_PATTERNS.some((re) => re.test(text));
@@ -173,7 +177,7 @@ function bestCatalogMatch(
   catalog: TrackInfo[],
   mode: CatalogMode
 ): { track: TrackInfo; score: number } | null {
-  const scoreFn = mode === "tienFamily" ? scoreGenericMatch : scoreItunesMatch;
+  const scoreFn = isGenericCatalog(mode) ? scoreGenericMatch : scoreItunesMatch;
   let best: { track: TrackInfo; score: number } | null = null;
   for (const track of catalog) {
     const score = scoreFn(result, track);
@@ -190,12 +194,12 @@ function pickValidatedResult(
   catalog: TrackInfo[],
   mode: CatalogMode
 ): ItunesResult | null {
-  const scoreFn = mode === "tienFamily" ? scoreGenericMatch : scoreItunesMatch;
+  const scoreFn = isGenericCatalog(mode) ? scoreGenericMatch : scoreItunesMatch;
 
   const ranked = results
     .filter((r) => {
       if (!r.previewUrl || isLiveRecording(r) || isCoverOrTribute(r)) return false;
-      return mode === "tienFamily" ? true : isJayChouRecording(r);
+      return isGenericCatalog(mode) ? true : isJayChouRecording(r);
     })
     .map((r) => ({
       result: r,
@@ -229,7 +233,7 @@ function buildGenericSearchTerms(track: TrackInfo): string[] {
 }
 
 function buildSearchTerms(track: TrackInfo, mode: CatalogMode): string[] {
-  return mode === "tienFamily"
+  return isGenericCatalog(mode)
     ? buildGenericSearchTerms(track)
     : buildJayChouSearchTerms(track);
 }
@@ -293,7 +297,7 @@ function isCachedPreviewValid(
     trackName: cached.itunesTrackName,
     artistName: cached.itunesArtistName,
   };
-  if (mode === "tienFamily") {
+  if (isGenericCatalog(mode)) {
     return scoreGenericMatch(cachedResult, track) >= MIN_MATCH_SCORE;
   }
   return (

@@ -36,11 +36,17 @@ export function useGameSocket() {
     };
     const onUpdate = (r: ClientRoomView) => setRoom(r);
     const onError = ({ message }: { message: string }) => setError(message);
+    const onLeft = () => {
+      setPlayerId(null);
+      setRoom(null);
+      setError(null);
+    };
 
     s.on("connect", onConnect);
     s.on("disconnect", onDisconnect);
     s.on("room:joined", onJoined);
     s.on("room:update", onUpdate);
+    s.on("room:left", onLeft);
     s.on("error", onError);
 
     if (s.connected) setConnected(true);
@@ -50,6 +56,7 @@ export function useGameSocket() {
       s.off("disconnect", onDisconnect);
       s.off("room:joined", onJoined);
       s.off("room:update", onUpdate);
+      s.off("room:left", onLeft);
       s.off("error", onError);
     };
   }, []);
@@ -67,7 +74,11 @@ export function useGameSocket() {
   }, []);
 
   const updateSettings = useCallback(
-    (settings: { rounds?: number; choiceCount?: number; gameMode?: "jayChou" | "tienFamily" }) => {
+    (settings: {
+      rounds?: number;
+      choiceCount?: number;
+      gameMode?: "jayChou" | "tienFamily" | "dantonFavorites";
+    }) => {
       socketRef.current?.emit("room:settings", settings);
     },
     []
@@ -93,6 +104,10 @@ export function useGameSocket() {
     socketRef.current?.emit("game:returnToLobby");
   }, []);
 
+  const leaveRoom = useCallback(() => {
+    socketRef.current?.emit("room:leave");
+  }, []);
+
   const clearError = useCallback(() => setError(null), []);
 
   return {
@@ -110,5 +125,6 @@ export function useGameSocket() {
     signalAudioReady,
     nextRound,
     returnToLobby,
+    leaveRoom,
   };
 }
