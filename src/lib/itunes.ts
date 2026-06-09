@@ -129,8 +129,16 @@ function scoreTitleMatch(resultTitle: string, trackTitle: string): number {
   return 0;
 }
 
+/** Strip a trailing "(Movie)" suffix used in choice labels — iTunes titles omit it. */
+function catalogTitleForMatch(title: string): string {
+  return title.replace(/\s*\([^)]+\)\s*$/, "").trim();
+}
+
 function scoreGenericMatch(result: ItunesResult, track: TrackInfo): number {
-  const titleScore = scoreTitleMatch(result.trackName ?? "", track.name);
+  const titleScore = scoreTitleMatch(
+    result.trackName ?? "",
+    catalogTitleForMatch(track.name)
+  );
   const artistScore = scoreArtistMatch(result.artistName ?? "", track.english);
   if (titleScore < MIN_MATCH_SCORE || artistScore < 50) return 0;
   return Math.min(titleScore, artistScore === 100 ? titleScore : Math.max(artistScore, 70));
@@ -216,11 +224,8 @@ function buildJayChouSearchTerms(track: TrackInfo): string[] {
 }
 
 function buildGenericSearchTerms(track: TrackInfo): string[] {
-  return [
-    `${track.english} ${track.name}`,
-    `${track.name} ${track.english}`,
-    track.name,
-  ];
+  const title = catalogTitleForMatch(track.name);
+  return [`${track.english} ${title}`, `${title} ${track.english}`, title];
 }
 
 function buildSearchTerms(track: TrackInfo, mode: CatalogMode): string[] {

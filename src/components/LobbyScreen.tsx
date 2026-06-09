@@ -145,7 +145,7 @@ export default function LobbyScreen({
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   {isTienFamily
-                    ? "Portland2023 playlist · 30 family favorites"
+                    ? "Kid's Faves for Game · 30 songs"
                     : "Jay Chou discography (default)"}
                 </p>
               </div>

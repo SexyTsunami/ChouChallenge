@@ -1,61 +1,122 @@
 /**
- * Portland2023 — Mei Tien's Spotify family favorites playlist.
- * `name` = song title, `english` = artist (shown as subtitle in the UI).
- * https://open.spotify.com/playlist/3X8JiOW4HgWEgjenx3xgQw
+ * Kid's Faves for Game — Mei Tien's Spotify family playlist.
+ * `name` = song title (Disney/Ghibli titles include the film in parentheses).
+ * `english` = artist (shown as subtitle in the UI).
+ * https://open.spotify.com/playlist/2ZAbzDpSme2te4QkYS5YRL
  */
 import type { TrackInfo } from "@/types/game";
 
 export const TIEN_FAMILY_SONGS: TrackInfo[] = [
-  { id: "safe-and-sound", name: "Safe And Sound", english: "Capital Cities" },
-  { id: "mates-of-soul", name: "The Mates of Soul", english: "Taylor John Williams" },
-  { id: "bubble-toes", name: "Bubble Toes", english: "Jack Johnson" },
-  { id: "soul-bossa-nova", name: "Soul Bossa Nova", english: "Quincy Jones" },
-  { id: "drunk", name: "drunk", english: "keshi" },
-  { id: "circles", name: "Circles", english: "Post Malone" },
   {
-    id: "i-like-you",
-    name: "I Like You (A Happier Song)",
-    english: "Post Malone, Doja Cat",
+    id: "ppap",
+    name: "PPAP (Pen-Pineapple-Apple-Pen)",
+    english: "PIKOTARO",
   },
-  { id: "double-take", name: "double take", english: "Dhruv" },
-  { id: "sunroof", name: "Sunroof", english: "Nicky Youre, dazy" },
-  { id: "amazing", name: "AMAZING", english: "Rex Orange County" },
   {
-    id: "across-the-room",
-    name: "Across the Room",
-    english: "Public Library Commute, Forrest.",
+    id: "golden",
+    name: "Golden",
+    english: "HUNTR/X, EJAE, AUDREY NUNA, REI AMI",
   },
-  { id: "waves", name: "Waves", english: "Fiji Blue" },
-  { id: "parachute", name: "parachute", english: "John K" },
-  { id: "summer-vibe", name: "Summer Vibe", english: "Forrest Nolan" },
+  { id: "the-cat-song", name: "The Cat Song", english: "Bryant Oden" },
+  { id: "rude", name: "Rude", english: "MAGIC!" },
+  { id: "cupid", name: "Cupid", english: "FIFTY FIFTY" },
   {
-    id: "falling-in-love-feels-like",
-    name: "this is what falling in love feels like",
-    english: "JVKE",
+    id: "beauty-and-the-beast",
+    name: "Beauty and the Beast (Beauty and the Beast)",
+    english: "Angela Lansbury",
   },
-  { id: "summer-nights", name: "summer nights", english: "The Millennial Club" },
-  { id: "sheluvme", name: "sheluvme", english: "Tai Verdes" },
-  { id: "lovely-day", name: "Lovely Day", english: "Bill Withers" },
-  { id: "hotel-california", name: "Hotel California", english: "Eagles" },
-  { id: "flowers", name: "Flowers", english: "Miley Cyrus" },
-  { id: "cold-heart", name: "Cold Heart", english: "Elton John, Dua Lipa, PNAU" },
-  { id: "i-aint-worried", name: "I Ain't Worried", english: "OneRepublic" },
-  { id: "can-i-call-you-tonight", name: "Can I Call You Tonight?", english: "Dayglow" },
   {
-    id: "less-i-know-the-better",
-    name: "The Less I Know The Better",
-    english: "Tame Impala",
+    id: "bare-necessities",
+    name: "The Bare Necessities (The Jungle Book)",
+    english: "Phil Harris, Bruce Reitherman",
   },
-  { id: "deja-vu", name: "deja vu", english: "Olivia Rodrigo" },
-  { id: "love-story", name: "Love Story (Taylor's Version)", english: "Taylor Swift" },
-  { id: "remember-when", name: "Remember When", english: "Wallows" },
-  { id: "yellow", name: "Yellow", english: "Coldplay" },
   {
-    id: "leave-the-door-open",
-    name: "Leave The Door Open",
-    english: "Bruno Mars, Anderson .Paak, Silk Sonic",
+    id: "youre-welcome",
+    name: "You're Welcome (Moana)",
+    english: "Dwayne Johnson",
   },
-  { id: "slide-away", name: "Slide Away", english: "Miley Cyrus" },
+  {
+    id: "we-dont-talk-about-bruno",
+    name: "We Don't Talk About Bruno (Encanto)",
+    english: "Carolina Gaitán, Mauro Castillo, Adassa",
+  },
+  {
+    id: "how-far-ill-go",
+    name: "How Far I'll Go (Moana)",
+    english: "Auli'i Cravalho",
+  },
+  {
+    id: "for-the-first-time-in-forever",
+    name: "For the First Time in Forever (Frozen)",
+    english: "Kristen Bell, Idina Menzel",
+  },
+  {
+    id: "surface-pressure",
+    name: "Surface Pressure (Encanto)",
+    english: "Jessica Darrow",
+  },
+  {
+    id: "a-whole-new-world",
+    name: "A Whole New World (Aladdin)",
+    english: "Lea Salonga, Brad Kane",
+  },
+  {
+    id: "hakuna-matata",
+    name: "Hakuna Matata (The Lion King)",
+    english: "Nathan Lane, Ernie Sabella, Jason Weaver",
+  },
+  {
+    id: "be-our-guest",
+    name: "Be Our Guest (Beauty and the Beast)",
+    english: "Angela Lansbury, Jerry Orbach",
+  },
+  {
+    id: "friend-like-me",
+    name: "Friend Like Me (Aladdin)",
+    english: "Will Smith",
+  },
+  {
+    id: "can-you-feel-the-love-tonight",
+    name: "Can You Feel the Love Tonight (The Lion King)",
+    english: "Joseph Williams, Sally Dworsky, Nathan Lane",
+  },
+  {
+    id: "circle-of-life",
+    name: "Circle of Life (The Lion King)",
+    english: "Carmen Twillie, Lebo M.",
+  },
+  {
+    id: "married-life",
+    name: "Married Life (Up)",
+    english: "Michael Giacchino",
+  },
+  { id: "yum-yum-breakfast-burrito", name: "Yum Yum Breakfast Burrito", english: "Parry Gripp" },
+  {
+    id: "levitating",
+    name: "Levitating (feat. DaBaby)",
+    english: "Dua Lipa, DaBaby",
+  },
+  { id: "love-again", name: "Love Again", english: "Dua Lipa" },
+  {
+    id: "journey-starts-today",
+    name: "The Journey Starts Today",
+    english: "Walk off the Earth, Pokémon",
+  },
+  {
+    id: "die-with-a-smile",
+    name: "Die With A Smile",
+    english: "Lady Gaga, Bruno Mars",
+  },
+  {
+    id: "blue-da-ba-dee",
+    name: "Blue (Da Ba Dee)",
+    english: "Eiffel 65, Gabry Ponte",
+  },
+  { id: "shake-it-off", name: "Shake It Off", english: "Taylor Swift" },
+  { id: "slippery-fish", name: "Slippery Fish", english: "Amy Liz" },
+  { id: "goin-to-the-zoo", name: "Goin' to the Zoo", english: "Amy Liz" },
+  { id: "luna-mezzo-mare", name: "Luna Mezzo Mare", english: "Lou Monte" },
+  { id: "mashed-potato-time", name: "Mashed Potato Time", english: "Dee Dee Sharp" },
 ];
 
 export function getTienFamilySongList(): TrackInfo[] {
