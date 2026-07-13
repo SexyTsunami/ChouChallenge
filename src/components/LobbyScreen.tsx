@@ -146,23 +146,73 @@ export default function LobbyScreen({
         </ul>
       </section>
 
-      <section className="glass rounded-2xl p-4 mb-6">
-        <h2 className="font-display font-semibold mb-1">Scoring</h2>
-        <p className="text-gray-500 text-xs mb-3">
-          The faster you answer correctly, the more points you earn.
-        </p>
-        <ul className="space-y-1.5">
-          {PLACEMENT_POINTS.map((points, i) => (
-            <li
-              key={i}
-              className="flex items-center justify-between bg-vinyl-card rounded-lg px-3 py-2 text-sm"
+      {isHost && (
+        <section className="glass rounded-2xl p-4 mb-6">
+          <h2 className="font-display font-semibold mb-1">Custom playlist</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            Paste a public Spotify or YouTube playlist link to play with your own songs.
+            This turns off the preset challenges below.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              inputMode="url"
+              autoComplete="off"
+              value={playlistDraft}
+              placeholder="https://open.spotify.com/playlist/… or YouTube playlist URL"
+              onChange={(e) => setPlaylistDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  loadPlaylist();
+                }
+              }}
+              className="input-field text-sm flex-1 min-w-0"
+            />
+            <button
+              type="button"
+              className="btn-primary shrink-0 px-5 py-3 sm:py-0"
+              disabled={playlistLoading || !playlistDraft.trim()}
+              onClick={loadPlaylist}
             >
-              <span className="text-gray-300">{ORDINAL_WORDS[i]} player to guess correctly</span>
-              <span className="font-mono font-bold text-vinyl-accent">{points} pts</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+              {playlistLoading ? "Loading…" : "Load playlist"}
+            </button>
+          </div>
+          {isCustom ? (
+            <div className="mt-3 flex items-start justify-between gap-3">
+              <p
+                className={`text-xs ${
+                  playlistStatus === "error"
+                    ? "text-red-400"
+                    : playlistStatus === "loading"
+                      ? "text-amber-400"
+                      : playlistStatus === "ready"
+                        ? "text-vinyl-accent"
+                        : "text-gray-500"
+                }`}
+              >
+                {playlistStatus === "loading" && "Loading playlist…"}
+                {playlistStatus === "ready" &&
+                  `Ready · ${room.tracks.length} songs from “${room.settings.customPlaylistTitle ?? "playlist"}”`}
+                {playlistStatus === "error" &&
+                  (room.playlistError || "Could not load playlist.")}
+                {playlistStatus === "idle" && "Paste a link and tap Load playlist."}
+              </p>
+              <button
+                type="button"
+                className="text-xs text-gray-400 hover:text-white shrink-0"
+                onClick={clearPlaylist}
+              >
+                Clear
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 mt-2">
+              Leave empty to use Jay Chou or a preset challenge below.
+            </p>
+          )}
+        </section>
+      )}
 
       {isHost && (
         <section className="glass rounded-2xl p-4 mb-6">
@@ -194,68 +244,8 @@ export default function LobbyScreen({
 
           <div className="mt-5 pt-5 border-t border-vinyl-border space-y-4">
             <p className="text-xs text-gray-500">
-              Playlist mode — only one can be active (custom link turns presets off)
+              Preset challenges — only one mode can be active
             </p>
-
-            <div>
-              <label className="block text-sm font-medium mb-1.5">
-                Custom playlist link
-              </label>
-              <p className="text-xs text-gray-500 mb-2">
-                Paste a public Spotify or YouTube playlist URL
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={playlistDraft}
-                  placeholder="https://open.spotify.com/playlist/…"
-                  onChange={(e) => setPlaylistDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      loadPlaylist();
-                    }
-                  }}
-                  className="input-field text-sm flex-1 min-w-0"
-                />
-                <button
-                  type="button"
-                  className="btn-secondary shrink-0 px-4"
-                  disabled={playlistLoading || !playlistDraft.trim()}
-                  onClick={loadPlaylist}
-                >
-                  {playlistLoading ? "…" : "Load"}
-                </button>
-              </div>
-              {isCustom && (
-                <div className="mt-2 flex items-start justify-between gap-3">
-                  <p
-                    className={`text-xs ${
-                      playlistStatus === "error"
-                        ? "text-red-400"
-                        : playlistStatus === "loading"
-                          ? "text-amber-400"
-                          : playlistStatus === "ready"
-                            ? "text-vinyl-accent"
-                            : "text-gray-500"
-                    }`}
-                  >
-                    {playlistStatus === "loading" && "Loading playlist…"}
-                    {playlistStatus === "ready" &&
-                      `Ready · ${room.tracks.length} songs from “${room.settings.customPlaylistTitle ?? "playlist"}”`}
-                    {playlistStatus === "error" &&
-                      (room.playlistError || "Could not load playlist.")}
-                  </p>
-                  <button
-                    type="button"
-                    className="text-xs text-gray-400 hover:text-white shrink-0"
-                    onClick={clearPlaylist}
-                  >
-                    Clear
-                  </button>
-                </div>
-              )}
-            </div>
 
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
@@ -329,6 +319,24 @@ export default function LobbyScreen({
           </div>
         </section>
       )}
+
+      <section className="glass rounded-2xl p-4 mb-6">
+        <h2 className="font-display font-semibold mb-1">Scoring</h2>
+        <p className="text-gray-500 text-xs mb-3">
+          The faster you answer correctly, the more points you earn.
+        </p>
+        <ul className="space-y-1.5">
+          {PLACEMENT_POINTS.map((points, i) => (
+            <li
+              key={i}
+              className="flex items-center justify-between bg-vinyl-card rounded-lg px-3 py-2 text-sm"
+            >
+              <span className="text-gray-300">{ORDINAL_WORDS[i]} player to guess correctly</span>
+              <span className="font-mono font-bold text-vinyl-accent">{points} pts</span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <div className="flex flex-col gap-3">
         <button
