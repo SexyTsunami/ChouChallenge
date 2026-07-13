@@ -7,22 +7,32 @@ export interface Player {
   socketId: string;
 }
 
-export type GameMode = "jayChou" | "tienFamily" | "dantonFavorites";
+export type GameMode = "jayChou" | "tienFamily" | "dantonFavorites" | "custom";
+
+export type PlaylistImportStatus = "idle" | "loading" | "ready" | "error";
 
 export interface RoomSettings {
   rounds: number;
   /** Number of multiple-choice options per round (4–8). */
   choiceCount: number;
-  /** Song catalog — Jay Chou, Tien family, or Danton favorites (one at a time). */
+  /** Song catalog — built-in modes or a pasted custom playlist (one at a time). */
   gameMode: GameMode;
+  /** Pasted Spotify/YouTube playlist URL when gameMode is custom. */
+  customPlaylistUrl?: string;
+  /** Display title from the imported playlist. */
+  customPlaylistTitle?: string;
 }
 
 export interface TrackInfo {
   id: string;
-  /** Chinese title */
+  /** Chinese title / primary song title */
   name: string;
-  /** English title */
+  /** English title / artist subtitle */
   english: string;
+  /** Optional pre-resolved preview (e.g. Spotify embed). */
+  previewUrl?: string;
+  /** Optional artwork for pre-resolved previews. */
+  artworkUrl?: string;
 }
 
 export interface SongChoice {
@@ -79,6 +89,9 @@ export interface RoomState {
   currentRound: number;
   /** Extra tiebreaker rounds until one player leads. */
   suddenDeath: boolean;
+  /** Status of custom playlist import for lobby UI. */
+  playlistStatus: PlaylistImportStatus;
+  playlistError?: string;
   round?: RoundState;
   roundResult?: RoundResult;
   tracks: TrackInfo[];

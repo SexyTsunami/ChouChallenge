@@ -77,7 +77,9 @@ export function useGameSocket() {
     (settings: {
       rounds?: number;
       choiceCount?: number;
-      gameMode?: "jayChou" | "tienFamily" | "dantonFavorites";
+      gameMode?: "jayChou" | "tienFamily" | "dantonFavorites" | "custom";
+      playlistUrl?: string;
+      clearCustomPlaylist?: boolean;
     }) => {
       socketRef.current?.emit("room:settings", settings);
     },

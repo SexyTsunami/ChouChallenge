@@ -311,6 +311,14 @@ export async function fetchItunesPreview(
   catalog: TrackInfo[],
   mode: CatalogMode = "jayChou"
 ): Promise<{ previewUrl: string; artworkUrl: string } | null> {
+  // Custom Spotify imports often ship with a ready preview URL.
+  if (track.previewUrl) {
+    return {
+      previewUrl: track.previewUrl,
+      artworkUrl: track.artworkUrl ?? "",
+    };
+  }
+
   const cacheKey = `${mode}:${track.id}`;
   const cached = previewCache.get(cacheKey);
   if (cached) {

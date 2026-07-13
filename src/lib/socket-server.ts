@@ -11,13 +11,12 @@ import {
   pickTrackWithPreview,
   randomSnippetParams,
 } from "./itunes";
-import { getTracksForMode } from "./tracks";
+import { getTracksForMode, isValidGameMode } from "./tracks";
+import { importPlaylistFromUrl } from "./playlistImport";
 import type {
   ClientRoomView,
   Player,
-  RoomSettings,
   RoomState,
-  TrackInfo,
 } from "@/types/game";
 import {
   AUDIO_PLAY_DELAY_MS,
@@ -53,6 +52,8 @@ function toClientView(room: RoomState, playerId: string): ClientRoomView {
     phase: room.phase,
     currentRound: room.currentRound,
     suddenDeath: room.suddenDeath,
+    playlistStatus: room.playlistStatus,
+    playlistError: room.playlistError,
     tracks: room.tracks.map(({ id, name, english }) => ({ id, name, english })),
     roundResult: room.roundResult,
   };
@@ -166,7 +167,9 @@ async function startNextRound(io: Server, code: string) {
   if (!room) return;
 
   const gameMode = room.settings.gameMode ?? DEFAULT_GAME_MODE;
-  const tracks = getTracksForMode(gameMode);
+  // Custom playlists stay on the room; built-in modes reload from catalogs.
+  const tracks =
+    gameMode === "custom" ? room.tracks : getTracksForMode(gameMode);
   room.tracks = tracks;
 
   const choiceCount = room.settings.choiceCount ?? DEFAULT_CHOICES;
@@ -307,6 +310,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
         phase: "lobby",
         currentRound: 0,
         suddenDeath: false,
+        playlistStatus: "idle",
         tracks,
       };
 
@@ -368,20 +372,25 @@ export function initSocketServer(httpServer: HttpServer): Server {
 
     socket.on(
       "room:settings",
-      ({
+      async ({
         rounds,
         choiceCount,
         gameMode,
+        playlistUrl,
+        clearCustomPlaylist,
       }: {
         rounds?: number;
         choiceCount?: number;
         gameMode?: GameMode;
+        playlistUrl?: string;
+        clearCustomPlaylist?: boolean;
       }) => {
         if (!currentPlayerId) return;
         const roomCode = playerToRoom.get(currentPlayerId);
         if (!roomCode) return;
         const room = getRoom(roomCode);
         if (!room || room.hostId !== currentPlayerId) return;
+        if (room.phase !== "lobby") return;
 
         if (rounds !== undefined) {
           room.settings.rounds = Math.min(MAX_ROUNDS, Math.max(MIN_ROUNDS, rounds));
@@ -392,13 +401,74 @@ export function initSocketServer(httpServer: HttpServer): Server {
             Math.max(MIN_CHOICES, choiceCount)
           );
         }
-        if (
-          gameMode !== undefined &&
-          (gameMode === "jayChou" || gameMode === "tienFamily" || gameMode === "dantonFavorites")
-        ) {
-          room.settings.gameMode = gameMode;
-          room.tracks = getTracksForMode(gameMode);
+
+        const applyBuiltInMode = (mode: GameMode) => {
+          room.settings.gameMode = mode;
+          room.settings.customPlaylistUrl = undefined;
+          room.settings.customPlaylistTitle = undefined;
+          room.playlistStatus = "idle";
+          room.playlistError = undefined;
+          room.tracks = getTracksForMode(mode);
+        };
+
+        if (clearCustomPlaylist) {
+          applyBuiltInMode("jayChou");
+          broadcastRoom(io, room);
+          return;
         }
+
+        if (playlistUrl !== undefined) {
+          const raw = playlistUrl.trim();
+          if (!raw) {
+            applyBuiltInMode("jayChou");
+            broadcastRoom(io, room);
+            return;
+          }
+
+          room.settings.gameMode = "custom";
+          room.settings.customPlaylistUrl = raw;
+          room.settings.customPlaylistTitle = undefined;
+          room.playlistStatus = "loading";
+          room.playlistError = undefined;
+          room.tracks = [];
+          broadcastRoom(io, room);
+
+          try {
+            const imported = await importPlaylistFromUrl(raw);
+            // Host may have switched modes while we were loading.
+            if (room.settings.gameMode !== "custom") return;
+            if ((room.settings.customPlaylistUrl ?? "").trim() !== raw) return;
+
+            const minNeeded = room.settings.choiceCount ?? DEFAULT_CHOICES;
+            if (imported.tracks.length < minNeeded) {
+              room.playlistStatus = "error";
+              room.playlistError = `Need at least ${minNeeded} songs (found ${imported.tracks.length}).`;
+              room.tracks = [];
+              broadcastRoom(io, room);
+              return;
+            }
+
+            room.settings.customPlaylistUrl = imported.url;
+            room.settings.customPlaylistTitle = imported.title;
+            room.tracks = imported.tracks;
+            room.playlistStatus = "ready";
+            room.playlistError = undefined;
+            broadcastRoom(io, room);
+          } catch (err) {
+            if (room.settings.gameMode !== "custom") return;
+            room.playlistStatus = "error";
+            room.playlistError =
+              err instanceof Error ? err.message : "Failed to import playlist.";
+            room.tracks = [];
+            broadcastRoom(io, room);
+          }
+          return;
+        }
+
+        if (gameMode !== undefined && isValidGameMode(gameMode) && gameMode !== "custom") {
+          applyBuiltInMode(gameMode);
+        }
+
         broadcastRoom(io, room);
       }
     );
@@ -414,6 +484,19 @@ export function initSocketServer(httpServer: HttpServer): Server {
       if (!allReady) {
         socket.emit("error", { message: "All players must be ready" });
         return;
+      }
+
+      if (room.settings.gameMode === "custom") {
+        if (room.playlistStatus === "loading") {
+          socket.emit("error", { message: "Still loading your playlist…" });
+          return;
+        }
+        if (room.playlistStatus !== "ready" || room.tracks.length === 0) {
+          socket.emit("error", {
+            message: room.playlistError || "Load a valid playlist before starting.",
+          });
+          return;
+        }
       }
 
       room.players.forEach((p) => {

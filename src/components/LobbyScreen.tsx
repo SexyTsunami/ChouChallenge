@@ -1,6 +1,7 @@
 "use client";
 
-import type { ClientRoomView } from "@/types/game";
+import { useEffect, useState } from "react";
+import type { ClientRoomView, GameMode } from "@/types/game";
 import {
   DEFAULT_CHOICES,
   DEFAULT_GAME_MODE,
@@ -16,15 +17,19 @@ import { getGameModeLabel } from "@/lib/tracks";
 
 const ORDINAL_WORDS = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"];
 
+type SettingsPatch = {
+  rounds?: number;
+  choiceCount?: number;
+  gameMode?: GameMode;
+  playlistUrl?: string;
+  clearCustomPlaylist?: boolean;
+};
+
 interface LobbyScreenProps {
   room: ClientRoomView;
   playerId: string;
   onReady: (ready: boolean) => void;
-  onSettings: (settings: {
-    rounds?: number;
-    choiceCount?: number;
-    gameMode?: "jayChou" | "tienFamily" | "dantonFavorites";
-  }) => void;
+  onSettings: (settings: SettingsPatch) => void;
   onStart: () => void;
   onLeave: () => void;
 }
@@ -40,11 +45,48 @@ export default function LobbyScreen({
   const me = room.players.find((p) => p.id === playerId);
   const isHost = me?.isHost ?? false;
   const allReady = room.players.length >= 1 && room.players.every((p) => p.isReady);
-  const canStart = isHost && allReady && room.players.length >= 1;
   const choiceCount = room.settings.choiceCount ?? DEFAULT_CHOICES;
   const gameMode = room.settings.gameMode ?? DEFAULT_GAME_MODE;
   const isTienFamily = gameMode === "tienFamily";
   const isDanton = gameMode === "dantonFavorites";
+  const isCustom = gameMode === "custom";
+  const playlistStatus = room.playlistStatus ?? "idle";
+  const playlistReady = isCustom && playlistStatus === "ready" && room.tracks.length > 0;
+  const playlistLoading = isCustom && playlistStatus === "loading";
+
+  const [playlistDraft, setPlaylistDraft] = useState(
+    room.settings.customPlaylistUrl ?? ""
+  );
+
+  useEffect(() => {
+    setPlaylistDraft(room.settings.customPlaylistUrl ?? "");
+  }, [room.settings.customPlaylistUrl]);
+
+  const canStart =
+    isHost &&
+    allReady &&
+    room.players.length >= 1 &&
+    !playlistLoading &&
+    (!isCustom || playlistReady);
+
+  const selectBuiltInMode = (mode: "jayChou" | "tienFamily" | "dantonFavorites") => {
+    setPlaylistDraft("");
+    onSettings({ gameMode: mode });
+  };
+
+  const loadPlaylist = () => {
+    const url = playlistDraft.trim();
+    if (!url) {
+      onSettings({ clearCustomPlaylist: true });
+      return;
+    }
+    onSettings({ playlistUrl: url });
+  };
+
+  const clearPlaylist = () => {
+    setPlaylistDraft("");
+    onSettings({ clearCustomPlaylist: true });
+  };
 
   return (
     <main className="min-h-dvh px-4 py-6 max-w-lg mx-auto relative">
@@ -65,7 +107,8 @@ export default function LobbyScreen({
           Share this code with friends ({room.players.length}/{MAX_PLAYERS})
         </p>
         <p className="text-vinyl-accent/90 text-xs mt-3 font-medium">
-          {getGameModeLabel(gameMode)}
+          {getGameModeLabel(gameMode, room.settings.customPlaylistTitle)}
+          {playlistReady ? ` · ${room.tracks.length} songs` : ""}
         </p>
       </header>
 
@@ -148,8 +191,72 @@ export default function LobbyScreen({
             />
             <span className="font-mono text-xl w-8 text-center">{choiceCount}</span>
           </div>
+
           <div className="mt-5 pt-5 border-t border-vinyl-border space-y-4">
-            <p className="text-xs text-gray-500">Playlist mode — only one can be active</p>
+            <p className="text-xs text-gray-500">
+              Playlist mode — only one can be active (custom link turns presets off)
+            </p>
+
+            <div>
+              <label className="block text-sm font-medium mb-1.5">
+                Custom playlist link
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Paste a public Spotify or YouTube playlist URL
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={playlistDraft}
+                  placeholder="https://open.spotify.com/playlist/…"
+                  onChange={(e) => setPlaylistDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      loadPlaylist();
+                    }
+                  }}
+                  className="input-field text-sm flex-1 min-w-0"
+                />
+                <button
+                  type="button"
+                  className="btn-secondary shrink-0 px-4"
+                  disabled={playlistLoading || !playlistDraft.trim()}
+                  onClick={loadPlaylist}
+                >
+                  {playlistLoading ? "…" : "Load"}
+                </button>
+              </div>
+              {isCustom && (
+                <div className="mt-2 flex items-start justify-between gap-3">
+                  <p
+                    className={`text-xs ${
+                      playlistStatus === "error"
+                        ? "text-red-400"
+                        : playlistStatus === "loading"
+                          ? "text-amber-400"
+                          : playlistStatus === "ready"
+                            ? "text-vinyl-accent"
+                            : "text-gray-500"
+                    }`}
+                  >
+                    {playlistStatus === "loading" && "Loading playlist…"}
+                    {playlistStatus === "ready" &&
+                      `Ready · ${room.tracks.length} songs from “${room.settings.customPlaylistTitle ?? "playlist"}”`}
+                    {playlistStatus === "error" &&
+                      (room.playlistError || "Could not load playlist.")}
+                  </p>
+                  <button
+                    type="button"
+                    className="text-xs text-gray-400 hover:text-white shrink-0"
+                    onClick={clearPlaylist}
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-sm font-medium leading-snug">
@@ -158,9 +265,11 @@ export default function LobbyScreen({
                 <p className="text-xs text-gray-500 mt-1">
                   {isTienFamily
                     ? "Kid's Faves for Game · 30 songs"
-                    : isDanton
-                      ? "Off — Danton's playlist is active"
-                      : "Jay Chou discography (default)"}
+                    : isCustom
+                      ? "Off — custom playlist is active"
+                      : isDanton
+                        ? "Off — Danton's playlist is active"
+                        : "Jay Chou discography (default)"}
                 </p>
               </div>
               <button
@@ -169,7 +278,7 @@ export default function LobbyScreen({
                 aria-checked={isTienFamily}
                 aria-label="Tien Family Favorites Challenge"
                 onClick={() =>
-                  onSettings({ gameMode: isTienFamily ? "jayChou" : "tienFamily" })
+                  selectBuiltInMode(isTienFamily ? "jayChou" : "tienFamily")
                 }
                 className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${
                   isTienFamily ? "bg-vinyl-accent" : "bg-vinyl-card border border-vinyl-border"
@@ -182,6 +291,7 @@ export default function LobbyScreen({
                 />
               </button>
             </div>
+
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-sm font-medium leading-snug">
@@ -190,9 +300,11 @@ export default function LobbyScreen({
                 <p className="text-xs text-gray-500 mt-1">
                   {isDanton
                     ? "Danton's playlist · 50 songs"
-                    : isTienFamily
-                      ? "Off — Tien Family playlist is active"
-                      : "Jay Chou discography (default)"}
+                    : isCustom
+                      ? "Off — custom playlist is active"
+                      : isTienFamily
+                        ? "Off — Tien Family playlist is active"
+                        : "Jay Chou discography (default)"}
                 </p>
               </div>
               <button
@@ -201,7 +313,7 @@ export default function LobbyScreen({
                 aria-checked={isDanton}
                 aria-label="Danton's Favorites Challenge"
                 onClick={() =>
-                  onSettings({ gameMode: isDanton ? "jayChou" : "dantonFavorites" })
+                  selectBuiltInMode(isDanton ? "jayChou" : "dantonFavorites")
                 }
                 className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${
                   isDanton ? "bg-vinyl-accent" : "bg-vinyl-card border border-vinyl-border"
@@ -242,7 +354,13 @@ export default function LobbyScreen({
               onStart();
             }}
           >
-            {allReady ? "Start Game" : "Waiting for everyone to ready up…"}
+            {playlistLoading
+              ? "Loading playlist…"
+              : isCustom && !playlistReady
+                ? "Load a playlist to start"
+                : allReady
+                  ? "Start Game"
+                  : "Waiting for everyone to ready up…"}
           </button>
         )}
       </div>

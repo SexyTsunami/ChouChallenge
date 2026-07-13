@@ -16,8 +16,8 @@ interface GameScreenProps {
 
 export default function GameScreen({ room, playerId, onVote, onAudioReady }: GameScreenProps) {
   const round = room.round!;
-  const gameMode = room.settings.gameMode ?? DEFAULT_GAME_MODE;
-  const isPlaylistMode = gameMode !== "jayChou";
+  const isPlaylistMode =
+    (room.settings.gameMode ?? DEFAULT_GAME_MODE) !== "jayChou";
   const inSuddenDeath =
     room.suddenDeath && room.currentRound > room.settings.rounds;
   const suddenDeathRound = getSuddenDeathRoundNumber(
