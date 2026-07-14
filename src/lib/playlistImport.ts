@@ -203,12 +203,30 @@ async function importYoutubePlaylist(id: string, url: string): Promise<ImportedP
     throw new Error(`Could not load YouTube playlist (${res.status}).`);
   }
   const html = await res.text();
-  const match = html.match(/ytInitialData\s*=\s*(\{.*?\});/s);
-  if (!match) {
+  // Avoid the /s (dotAll) flag — tsconfig targets ES2017 and Next build typechecks fail on it.
+  const start = html.search(/ytInitialData\s*=\s*\{/);
+  if (start < 0) {
     throw new Error("Could not read YouTube playlist data. Is the playlist public?");
   }
+  const braceStart = html.indexOf("{", start);
+  let depth = 0;
+  let end = -1;
+  for (let i = braceStart; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  if (end < 0) {
+    throw new Error("Could not parse YouTube playlist data.");
+  }
 
-  const data = JSON.parse(match[1]) as Record<string, unknown>;
+  const data = JSON.parse(html.slice(braceStart, end + 1)) as Record<string, unknown>;
   const playlistTitle =
     (
       data as {
