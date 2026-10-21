@@ -150,25 +150,7 @@ export function getAiClipById(id: string): AiClipTrack | undefined {
   return IS_THIS_AI_CLIPS.find((c) => c.id === id);
 }
 
-export function youtubeWatchUrl(videoId: string): string {
-  return `https://www.youtube.com/watch?v=${videoId}`;
-}
-
-export function youtubeEmbedUrl(
-  videoId: string,
-  startSec: number,
-  durationSec: number
-): string {
-  const start = Math.max(0, Math.floor(startSec));
-  const end = start + Math.max(1, Math.floor(durationSec));
-  const params = new URLSearchParams({
-    autoplay: "1",
-    controls: "0",
-    modestbranding: "1",
-    playsinline: "1",
-    rel: "0",
-    start: String(start),
-    end: String(end),
-  });
-  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
-}
+export {
+  youtubeWatchUrl,
+  youtubeEmbedUrl,
+} from "./youtubeEmbed";

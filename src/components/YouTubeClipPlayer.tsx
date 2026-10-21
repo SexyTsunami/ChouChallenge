@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { youtubeEmbedUrl } from "@/lib/isThisAiSongs";
+import {
+  bindYoutubeListening,
+  isLikelyMobile,
+  postYoutubeCommand,
+  youtubeEmbedUrl,
+  youtubePause,
+  youtubeSeekAndPlay,
+  youtubeUnmuteAndPlay,
+} from "@/lib/youtubeEmbed";
 import { useServerClockAnchor } from "@/hooks/useServerClockAnchor";
 import { msUntilServerTime } from "@/lib/serverClock";
 
@@ -27,8 +35,10 @@ const EQ_ANIMATIONS = [
 
 /**
  * Plays a YouTube clip as audio-only during guessing.
- * The iframe stays sized for reliable autoplay, but is fully covered —
- * no video or thumbnail is shown until reveal.
+ *
+ * Mobile (esp. iOS) blocks unmuted autoplay unless playback starts in a tap.
+ * Flow: sync tap mounts a muted autoplay iframe → at play time unmute →
+ * if still silent, show "Tap for sound".
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -42,40 +52,80 @@ export default function YouTubeClipPlayer({
   onAudioReady,
 }: YouTubeClipPlayerProps) {
   const readySignaledRef = useRef(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [hasSynced, setHasSynced] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [embedSrc, setEmbedSrc] = useState<string | null>(null);
+  const [needsSoundTap, setNeedsSoundTap] = useState(false);
   const clockAnchor = useServerClockAnchor(roundStartTime);
 
   const signalSynced = useCallback(() => {
     if (readySignaledRef.current) return;
     readySignaledRef.current = true;
+
+    // Must set iframe src inside the user gesture for muted mobile autoplay.
+    setEmbedSrc(
+      youtubeEmbedUrl(youtubeVideoId, {
+        startSec: snippetStart,
+        durationSec: snippetDuration + 120,
+        mute: true,
+        autoplay: true,
+      })
+    );
     setHasSynced(true);
+    setNeedsSoundTap(false);
     onAudioReady?.();
-  }, [onAudioReady]);
+  }, [onAudioReady, youtubeVideoId, snippetStart, snippetDuration]);
 
   useEffect(() => {
     readySignaledRef.current = false;
     setHasSynced(false);
     setIsPlaying(false);
     setEmbedSrc(null);
+    setNeedsSoundTap(false);
   }, [youtubeVideoId]);
 
+  // Pause muted priming once the iframe is ready so it doesn't drift.
   useEffect(() => {
-    if (!hasSynced || audioPlayAt <= 0) return;
+    if (!embedSrc || isPlaying) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const onLoad = () => {
+      bindYoutubeListening(iframe);
+      // Brief muted play unlocks iOS; then pause until the synced start.
+      window.setTimeout(() => {
+        youtubePause(iframe);
+        postYoutubeCommand(iframe, "seekTo", [snippetStart, true]);
+      }, 400);
+    };
+
+    iframe.addEventListener("load", onLoad);
+    return () => iframe.removeEventListener("load", onLoad);
+  }, [embedSrc, isPlaying, snippetStart]);
+
+  useEffect(() => {
+    if (!hasSynced || audioPlayAt <= 0 || !embedSrc) return;
 
     const delay = clockAnchor
       ? msUntilServerTime(clockAnchor, audioPlayAt)
       : Math.max(0, audioPlayAt - Date.now());
 
     const startTimeout = setTimeout(() => {
-      setEmbedSrc(youtubeEmbedUrl(youtubeVideoId, snippetStart, snippetDuration));
+      const iframe = iframeRef.current;
+      youtubeSeekAndPlay(iframe, snippetStart);
       setIsPlaying(true);
+      // Desktop often unmutes fine; mobile usually still needs a tap.
+      if (isLikelyMobile()) {
+        setNeedsSoundTap(true);
+      }
     }, delay);
 
     const stopTimeout = setTimeout(
       () => {
+        youtubePause(iframeRef.current);
         setIsPlaying(false);
+        setNeedsSoundTap(false);
         setEmbedSrc(null);
       },
       delay + snippetDuration * 1000 + 400
@@ -89,10 +139,18 @@ export default function YouTubeClipPlayer({
     hasSynced,
     audioPlayAt,
     clockAnchor,
+    embedSrc,
     youtubeVideoId,
     snippetStart,
     snippetDuration,
   ]);
+
+  const handleSoundTap = useCallback(() => {
+    youtubeUnmuteAndPlay(iframeRef.current);
+    postYoutubeCommand(iframeRef.current, "seekTo", [snippetStart, true]);
+    setNeedsSoundTap(false);
+    setIsPlaying(true);
+  }, [snippetStart]);
 
   const showTapPrompt = !hasSynced;
   const showWaiting = hasSynced && audioSyncing;
@@ -101,21 +159,25 @@ export default function YouTubeClipPlayer({
     ? `Tap to sync (${syncReadyCount}/${syncTotalPlayers})`
     : showWaiting
       ? `Waiting for players… (${syncReadyCount}/${syncTotalPlayers})`
-      : isPlaying
-        ? "Now Playing"
-        : "Listen closely…";
+      : needsSoundTap
+        ? "Tap for sound"
+        : isPlaying
+          ? "Now Playing"
+          : "Listen closely…";
 
   const playerContent = (
     <>
-      {/* Sized iframe for autoplay; opaque cover hides all video cues */}
       <div className="relative w-full max-w-xs aspect-video rounded-2xl overflow-hidden bg-vinyl-surface ring-1 ring-vinyl-border">
         {embedSrc && (
           <iframe
+            ref={iframeRef}
             key={embedSrc}
             src={embedSrc}
             title="YouTube audio clip"
-            className="absolute inset-0 w-full h-full"
+            // Keep "visible" for mobile media policies; cover hides the picture.
+            className="absolute inset-0 w-full h-full opacity-[0.02]"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
           />
         )}
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-vinyl-surface">
@@ -123,17 +185,17 @@ export default function YouTubeClipPlayer({
             <div className="relative flex-shrink-0">
               <div
                 className={`w-3 h-3 rounded-full transition-colors duration-300 ${
-                  isPlaying
+                  isPlaying && !needsSoundTap
                     ? "bg-vinyl-accent"
-                    : showTapPrompt || showWaiting
+                    : showTapPrompt || showWaiting || needsSoundTap
                       ? "bg-amber-400"
                       : "bg-gray-600"
                 }`}
               />
-              {isPlaying && (
+              {isPlaying && !needsSoundTap && (
                 <span className="absolute inset-0 rounded-full bg-vinyl-accent animate-ping opacity-60" />
               )}
-              {(showTapPrompt || showWaiting) && !isPlaying && (
+              {(showTapPrompt || showWaiting || needsSoundTap) && (
                 <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-40" />
               )}
             </div>
@@ -143,18 +205,19 @@ export default function YouTubeClipPlayer({
                 <div
                   key={i}
                   className={`w-1.5 rounded-sm origin-bottom transition-colors duration-300 ${
-                    isPlaying
+                    isPlaying && !needsSoundTap
                       ? `bg-vinyl-accent ${anim}`
-                      : showTapPrompt || showWaiting
+                      : showTapPrompt || showWaiting || needsSoundTap
                         ? "bg-amber-400/70"
                         : "bg-gray-600"
                   }`}
                   style={{
-                    height: isPlaying
-                      ? "24px"
-                      : showTapPrompt || showWaiting
-                        ? "12px"
-                        : "3px",
+                    height:
+                      isPlaying && !needsSoundTap
+                        ? "24px"
+                        : showTapPrompt || showWaiting || needsSoundTap
+                          ? "12px"
+                          : "3px",
                   }}
                 />
               ))}
@@ -162,9 +225,9 @@ export default function YouTubeClipPlayer({
 
             <span
               className={`text-xs font-medium tracking-wide transition-colors duration-300 ${
-                isPlaying
+                isPlaying && !needsSoundTap
                   ? "text-vinyl-accent"
-                  : showTapPrompt || showWaiting
+                  : showTapPrompt || showWaiting || needsSoundTap
                     ? "text-amber-400"
                     : "text-gray-500"
               }`}
@@ -178,10 +241,12 @@ export default function YouTubeClipPlayer({
 
       <p className="text-xs text-gray-500 text-center max-w-xs">
         {showTapPrompt
-          ? "Everyone taps — the ~30s clip starts together."
+          ? "Everyone taps — enables sound, then the ~30s clip starts together."
           : showWaiting
             ? "Almost there — clip starts in a moment"
-            : "Video reveals after everyone guesses."}
+            : needsSoundTap
+              ? "Mobile needs one more tap to unmute the clip."
+              : "Video reveals after everyone guesses."}
       </p>
     </>
   );
@@ -196,6 +261,18 @@ export default function YouTubeClipPlayer({
           aria-label="Tap to sync clip with group"
         >
           {playerContent}
+        </button>
+      ) : needsSoundTap ? (
+        <button
+          type="button"
+          onClick={handleSoundTap}
+          className="flex flex-col items-center gap-3 w-full touch-manipulation active:opacity-90"
+          aria-label="Tap for sound"
+        >
+          {playerContent}
+          <span className="w-full max-w-xs py-3 rounded-full font-semibold btn-primary">
+            Tap for sound
+          </span>
         </button>
       ) : (
         playerContent
