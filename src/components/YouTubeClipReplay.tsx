@@ -78,7 +78,7 @@ export default function YouTubeClipReplay({
                   className="text-xs px-2.5 py-1 rounded-full bg-vinyl-accent/20 text-vinyl-accent font-semibold"
                   onClick={handlePlayToggle}
                 >
-                  {isActive ? "Stop for all" : "Play for group"}
+                  {isActive ? "Stop clip" : "Queue clip"}
                 </button>
               ) : (
                 <span
@@ -88,7 +88,7 @@ export default function YouTubeClipReplay({
                       : "bg-vinyl-surface text-gray-500"
                   }`}
                 >
-                  {isActive ? "Queued — tap Play above" : "Host picks the clip"}
+                  {isActive ? "Tap ▶ Play above" : "Host picks the clip"}
                 </span>
               )
             ) : null}

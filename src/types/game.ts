@@ -193,10 +193,10 @@ export const SNIPPET_LOOPS = 3;
 export const LOOP_PAUSE_MS = 400;
 /** Max wait for all players to preload audio before starting anyway */
 export const AUDIO_SYNC_MAX_WAIT_MS = 12000;
-/** Countdown after sync before the Play button unlocks for everyone */
-export const AUDIO_PLAY_DELAY_MS = 3000;
-/** Countdown after host queues a review clip before Play unlocks for everyone */
-export const REVIEW_PLAY_DELAY_MS = 3000;
+/** Brief pause after sync before Play appears (lets the room update). */
+export const AUDIO_PLAY_DELAY_MS = 1200;
+/** Kept for reviewPlayback.audioPlayAt; Play is available immediately on clients. */
+export const REVIEW_PLAY_DELAY_MS = 500;
 
 /** Points by placement for correct answers (1st through 4th, fastest first) */
 export const PLACEMENT_POINTS = [100, 75, 50, 25];

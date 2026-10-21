@@ -45,8 +45,8 @@ export default function ClipReviewList({
           </h2>
           <p className="text-xs text-gray-500 text-center">
             {isHost
-              ? "Queue a clip — everyone taps ▶ Play together when the countdown ends."
-              : "Host queues a clip — watch for ▶ Play with the group above."}
+              ? "Tap Queue clip, then ▶ Play on the player above for sound."
+              : "When the host queues a clip, tap ▶ Play above for sound."}
           </p>
           {clips.map((clip) => {
             const active = playback?.youtubeVideoId === clip.youtubeVideoId;
