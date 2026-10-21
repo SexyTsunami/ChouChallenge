@@ -42,6 +42,8 @@ export interface TrackInfo {
   youtubeVideoId?: string;
   /** AI vs Human label for Is This AI? mode. */
   aiLabel?: "AI" | "Human";
+  /** Preferred clip start in seconds (e.g. where vocals begin). */
+  snippetStart?: number;
 }
 
 export interface SongChoice {

@@ -179,6 +179,12 @@ function endRound(io: Server, code: string) {
 
   try {
     const activeRound = room.round;
+    // No answer = 0 points (explicit null so rankings show "No answer").
+    room.players.forEach((p) => {
+      if (activeRound.votes[p.id] === undefined) {
+        activeRound.votes[p.id] = null;
+      }
+    });
     const result = calculateRoundScores(activeRound, room.players);
 
     if (activeRound.mediaType === "youtube" && activeRound.youtubeVideoId) {
@@ -274,7 +280,15 @@ async function startNextRound(io: Server, code: string) {
 
     room.usedTrackIds.push(track.id);
     const correctIndex = clip.aiLabel === "AI" ? 0 : 1;
-    const snippetStart = Math.floor(Math.random() * 40);
+    // Prefer caption-derived vocal start baked into the catalog.
+    const snippetStart = Math.max(
+      0,
+      Math.floor(
+        typeof clip.snippetStart === "number" && Number.isFinite(clip.snippetStart)
+          ? clip.snippetStart
+          : 18
+      )
+    );
     const snippetDuration = AI_CLIP_DURATION_SEC;
 
     room.round = {
@@ -660,7 +674,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
       }
     });
 
-    /** Client timer hit 0 — backup if the server timeout was lost (dev HMR, etc.). */
+    /** Client timer hit 0 — ends round even if nobody answered (0 points). */
     socket.on("game:timerExpired", () => {
       if (!currentPlayerId) return;
       const roomCode = playerToRoom.get(currentPlayerId);
@@ -671,8 +685,8 @@ export function initSocketServer(httpServer: HttpServer): Server {
 
       const elapsed = Date.now() - room.round.roundStartTime;
       const limitMs = (room.round.timerSeconds || ROUND_TIMER_SECONDS) * 1000;
-      // Allow a little early (clock skew) so clients aren't stuck at 0s.
-      if (elapsed < limitMs - 1500) return;
+      // Allow early fire for clock skew / late audioPlayAt alignment.
+      if (elapsed < limitMs - 2500) return;
 
       endRound(io, room.code);
     });

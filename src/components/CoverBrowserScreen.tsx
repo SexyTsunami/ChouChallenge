@@ -43,7 +43,7 @@ function ClipRow({
       artist={clip.english}
       aiLabel={clip.aiLabel}
       artworkUrl={clip.artworkUrl}
-      snippetStart={0}
+      snippetStart={clip.snippetStart ?? 0}
       snippetDuration={AI_CLIP_DURATION_SEC}
       hostControlled
       isHost={isHost}
@@ -55,7 +55,7 @@ function ClipRow({
           artist: clip.english,
           aiLabel: clip.aiLabel,
           artworkUrl: clip.artworkUrl,
-          snippetStart: 0,
+          snippetStart: clip.snippetStart ?? 0,
           snippetDuration: AI_CLIP_DURATION_SEC,
         })
       }

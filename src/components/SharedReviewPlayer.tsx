@@ -102,7 +102,9 @@ export default function SharedReviewPlayer({
         <iframe
           ref={iframeRef}
           title={playback.title}
-          className={`absolute inset-0 w-full h-full border-0 ${playing ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 w-full h-full border-0 ${
+            playing ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           referrerPolicy="strict-origin-when-cross-origin"
@@ -114,7 +116,7 @@ export default function SharedReviewPlayer({
             className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/70 touch-manipulation"
           >
             <span className="px-4 py-2 rounded-full bg-vinyl-accent text-black font-semibold text-sm">
-              Tap to play ~30s clip
+              ▶ Tap to play ~30s clip
             </span>
             <span className="text-xs text-white/70">Required for sound on phones</span>
           </button>

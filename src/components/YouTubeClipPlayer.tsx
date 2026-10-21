@@ -32,7 +32,7 @@ const EQ_ANIMATIONS = [
 /**
  * Audio-focused YouTube clip for guessing.
  * Iframe stays mounted; Play sets src inside the tap (required for mobile sound).
- * Video is heavily blurred so it doesn't spoil AI vs Human.
+ * Overlay always captures taps so YouTube never steals navigation.
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -137,38 +137,51 @@ export default function YouTubeClipPlayer({
     : showWaiting
       ? `Waiting for players… (${syncReadyCount}/${syncTotalPlayers})`
       : showPlayPrompt
-        ? "Ready — tap Play clip"
+        ? "Tap Play clip below"
         : isPlaying
           ? "Now Playing"
           : clipStarted
             ? "Clip finished"
             : "Listen closely…";
 
+  const onPanelActivate = () => {
+    if (showTapPrompt) signalSynced();
+    else if (showPlayPrompt) handlePlayClip();
+  };
+
   return (
     <div className="flex flex-col items-center gap-3 w-full">
       <div className="relative w-full max-w-xs aspect-video rounded-2xl overflow-hidden bg-black ring-1 ring-vinyl-border">
-        {/* Always mounted so Play can set src inside the user gesture */}
+        {/* pointer-events-none: never open YouTube / steal taps */}
         <iframe
           ref={iframeRef}
           title="YouTube audio clip"
-          className={`absolute inset-0 w-full h-full border-0 transition-opacity ${
+          tabIndex={-1}
+          className={`absolute inset-0 w-full h-full border-0 pointer-events-none ${
             isPlaying ? "opacity-100" : "opacity-0"
           }`}
           style={
             isPlaying
-              ? { filter: "blur(28px) brightness(0.45) saturate(0.6)" }
+              ? { filter: "blur(32px) brightness(0.4) saturate(0.5)" }
               : undefined
           }
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
         />
 
-        <div
-          className={`absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 ${
-            isPlaying ? "bg-black/45 pointer-events-none" : "bg-vinyl-surface"
-          }`}
+        {/* Always intercept taps — never let them reach the iframe */}
+        <button
+          type="button"
+          disabled={!showTapPrompt && !showPlayPrompt}
+          onClick={onPanelActivate}
+          className={`absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 touch-manipulation ${
+            isPlaying ? "bg-black/50" : "bg-vinyl-surface"
+          } ${showTapPrompt || showPlayPrompt ? "cursor-pointer" : "cursor-default"}`}
+          aria-label={
+            showTapPrompt ? "Tap to sync" : showPlayPrompt ? "Play clip" : "Now playing"
+          }
         >
-          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl glass">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl glass pointer-events-none">
             <div className="relative flex-shrink-0">
               <div
                 className={`w-3 h-3 rounded-full transition-colors duration-300 ${
@@ -221,10 +234,14 @@ export default function YouTubeClipPlayer({
               {statusText}
             </span>
           </div>
-          <p className="text-[11px] text-white/70">
-            {isPlaying ? "Listening…" : "Audio only"}
+          <p className="text-[11px] text-white/70 pointer-events-none">
+            {isPlaying
+              ? "Listening… (video hidden)"
+              : showPlayPrompt
+                ? "Tap here or the button below"
+                : "Audio only"}
           </p>
-        </div>
+        </button>
       </div>
 
       {showTapPrompt && (
@@ -241,9 +258,9 @@ export default function YouTubeClipPlayer({
         <button
           type="button"
           onClick={handlePlayClip}
-          className="w-full max-w-xs py-3 rounded-full font-semibold btn-primary touch-manipulation"
+          className="w-full max-w-xs py-4 rounded-full font-bold text-base btn-primary touch-manipulation shadow-lg"
         >
-          Play clip
+          ▶ Play clip
         </button>
       )}
 
@@ -253,8 +270,8 @@ export default function YouTubeClipPlayer({
           : showWaiting
             ? "Almost there…"
             : showPlayPrompt
-              ? "Phones need this Play tap for sound."
-              : "Video reveals after everyone guesses."}
+              ? "Tap ▶ Play clip for sound (required on phones)."
+              : "Guess AI or Human — video reveals after the round."}
       </p>
     </div>
   );

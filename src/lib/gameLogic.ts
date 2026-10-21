@@ -69,8 +69,8 @@ export function calculateRoundScores(
     correctEnglish: round.correctEnglish,
     artworkUrl: round.artworkUrl,
     previewUrl: round.previewUrl,
-    // Continue from where the snippet ended, clamped so a 10s loop fits in the ~30s preview.
-    revealStart: Math.min(round.snippetStart + round.snippetDuration, 20),
+    // Continue from where the snippet ended (YouTube clips can start far into the video).
+    revealStart: Math.max(0, round.snippetStart + round.snippetDuration - 3),
     choices: round.choices,
     votes: { ...round.votes },
     scoresEarned,
