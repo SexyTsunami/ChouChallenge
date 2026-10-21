@@ -96,7 +96,6 @@ export default function HomePage() {
           onNext={nextRound}
           onPlayClip={playReviewClip}
           onStopClip={stopReviewClip}
-          onOpenCoverBrowser={openCoverBrowser}
         />
       );
 

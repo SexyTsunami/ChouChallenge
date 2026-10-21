@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isLikelyMobile, youtubeEmbedUrl } from "@/lib/youtubeEmbed";
+import {
+  isLikelyMobile,
+  startYoutubeInGesture,
+  stopYoutubeIframe,
+} from "@/lib/youtubeEmbed";
 import { useServerClockAnchor } from "@/hooks/useServerClockAnchor";
 import { msUntilServerTime } from "@/lib/serverClock";
 
@@ -26,9 +30,9 @@ const EQ_ANIMATIONS = [
 ];
 
 /**
- * Audio-only YouTube clip for guessing.
- * Sync tap unlocks the round; a second "Play clip" tap (in a real gesture)
- * starts the embed — required for mobile sound, reliable on desktop too.
+ * Audio-focused YouTube clip for guessing.
+ * Iframe stays mounted; Play sets src inside the tap (required for mobile sound).
+ * Video is heavily blurred so it doesn't spoil AI vs Human.
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -42,12 +46,20 @@ export default function YouTubeClipPlayer({
   onAudioReady,
 }: YouTubeClipPlayerProps) {
   const readySignaledRef = useRef(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasSynced, setHasSynced] = useState(false);
   const [clipStarted, setClipStarted] = useState(false);
   const [awaitingPlayTap, setAwaitingPlayTap] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [embedSrc, setEmbedSrc] = useState<string | null>(null);
   const clockAnchor = useServerClockAnchor(roundStartTime);
+
+  const clearStopTimer = () => {
+    if (stopTimerRef.current) {
+      clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+    }
+  };
 
   const signalSynced = useCallback(() => {
     if (readySignaledRef.current) return;
@@ -62,10 +74,17 @@ export default function YouTubeClipPlayer({
     setClipStarted(false);
     setAwaitingPlayTap(false);
     setIsPlaying(false);
-    setEmbedSrc(null);
+    clearStopTimer();
+    stopYoutubeIframe(iframeRef.current);
   }, [youtubeVideoId]);
 
-  // When the group is ready to hear the clip, prompt a Play tap (user gesture → sound).
+  useEffect(() => {
+    return () => {
+      clearStopTimer();
+      stopYoutubeIframe(iframeRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (!hasSynced || audioPlayAt <= 0 || clipStarted) return;
 
@@ -82,25 +101,28 @@ export default function YouTubeClipPlayer({
 
   const handlePlayClip = useCallback(() => {
     if (clipStarted) return;
-    const src = youtubeEmbedUrl(youtubeVideoId, {
+
+    const ok = startYoutubeInGesture(iframeRef.current, youtubeVideoId, {
       startSec: snippetStart,
       durationSec: snippetDuration,
       mute: false,
       autoplay: true,
+      controls: false,
     });
-    // Assigning src inside the click handler is what unlocks mobile audio.
-    setEmbedSrc(src);
+    if (!ok) return;
+
     setClipStarted(true);
     setAwaitingPlayTap(false);
     setIsPlaying(true);
 
-    window.setTimeout(() => {
+    clearStopTimer();
+    stopTimerRef.current = setTimeout(() => {
       setIsPlaying(false);
-      setEmbedSrc(null);
+      stopYoutubeIframe(iframeRef.current);
     }, snippetDuration * 1000 + 500);
   }, [clipStarted, youtubeVideoId, snippetStart, snippetDuration]);
 
-  // Desktop can autoplay without a second tap; phones still need Play.
+  // Desktop: start when the group is ready (autoplay with sound usually works).
   useEffect(() => {
     if (!awaitingPlayTap || clipStarted || isLikelyMobile()) return;
     handlePlayClip();
@@ -115,27 +137,37 @@ export default function YouTubeClipPlayer({
     : showWaiting
       ? `Waiting for players… (${syncReadyCount}/${syncTotalPlayers})`
       : showPlayPrompt
-        ? "Ready — tap Play"
+        ? "Ready — tap Play clip"
         : isPlaying
           ? "Now Playing"
           : clipStarted
             ? "Clip finished"
             : "Listen closely…";
 
-  const playerContent = (
-    <>
-      <div className="relative w-full max-w-xs aspect-video rounded-2xl overflow-hidden bg-vinyl-surface ring-1 ring-vinyl-border">
-        {embedSrc && (
-          <iframe
-            key={embedSrc}
-            src={embedSrc}
-            title="YouTube audio clip"
-            className="absolute inset-0 w-full h-full opacity-[0.02]"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerPolicy="strict-origin-when-cross-origin"
-          />
-        )}
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-vinyl-surface">
+  return (
+    <div className="flex flex-col items-center gap-3 w-full">
+      <div className="relative w-full max-w-xs aspect-video rounded-2xl overflow-hidden bg-black ring-1 ring-vinyl-border">
+        {/* Always mounted so Play can set src inside the user gesture */}
+        <iframe
+          ref={iframeRef}
+          title="YouTube audio clip"
+          className={`absolute inset-0 w-full h-full border-0 transition-opacity ${
+            isPlaying ? "opacity-100" : "opacity-0"
+          }`}
+          style={
+            isPlaying
+              ? { filter: "blur(28px) brightness(0.45) saturate(0.6)" }
+              : undefined
+          }
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
+
+        <div
+          className={`absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 ${
+            isPlaying ? "bg-black/45 pointer-events-none" : "bg-vinyl-surface"
+          }`}
+        >
           <div className="flex items-center gap-3 px-5 py-3 rounded-2xl glass">
             <div className="relative flex-shrink-0">
               <div
@@ -189,48 +221,41 @@ export default function YouTubeClipPlayer({
               {statusText}
             </span>
           </div>
-          <p className="text-[11px] text-gray-500">Audio only</p>
+          <p className="text-[11px] text-white/70">
+            {isPlaying ? "Listening…" : "Audio only"}
+          </p>
         </div>
       </div>
 
-      <p className="text-xs text-gray-500 text-center max-w-xs">
-        {showTapPrompt
-          ? "Everyone taps to sync — then Play starts the ~30s clip."
-          : showWaiting
-            ? "Almost there…"
-            : showPlayPrompt
-              ? "Tap Play when you’re ready to listen (needed for phone sound)."
-              : "Video reveals after everyone guesses."}
-      </p>
-    </>
-  );
-
-  return (
-    <div className="flex flex-col items-center gap-3">
-      {showTapPrompt ? (
+      {showTapPrompt && (
         <button
           type="button"
           onClick={signalSynced}
-          className="flex flex-col items-center gap-3 w-full touch-manipulation active:opacity-90"
-          aria-label="Tap to sync clip with group"
+          className="w-full max-w-xs py-3 rounded-full font-semibold btn-primary touch-manipulation"
         >
-          {playerContent}
+          Tap to sync ({syncReadyCount}/{syncTotalPlayers})
         </button>
-      ) : showPlayPrompt ? (
+      )}
+
+      {showPlayPrompt && (
         <button
           type="button"
           onClick={handlePlayClip}
-          className="flex flex-col items-center gap-3 w-full touch-manipulation active:opacity-90"
-          aria-label="Play clip"
+          className="w-full max-w-xs py-3 rounded-full font-semibold btn-primary touch-manipulation"
         >
-          {playerContent}
-          <span className="w-full max-w-xs py-3 rounded-full font-semibold btn-primary">
-            Play clip
-          </span>
+          Play clip
         </button>
-      ) : (
-        playerContent
       )}
+
+      <p className="text-xs text-gray-500 text-center max-w-xs">
+        {showTapPrompt
+          ? "Everyone taps to sync first."
+          : showWaiting
+            ? "Almost there…"
+            : showPlayPrompt
+              ? "Phones need this Play tap for sound."
+              : "Video reveals after everyone guesses."}
+      </p>
     </div>
   );
 }

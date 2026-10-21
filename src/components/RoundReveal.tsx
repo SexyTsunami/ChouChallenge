@@ -28,7 +28,6 @@ interface RoundRevealProps {
     snippetDuration?: number;
   }) => void;
   onStopClip: () => void;
-  onOpenCoverBrowser: () => void;
 }
 
 function playSuccessChime() {
@@ -65,7 +64,6 @@ export default function RoundReveal({
   onNext,
   onPlayClip,
   onStopClip,
-  onOpenCoverBrowser,
 }: RoundRevealProps) {
   const result = room.roundResult!;
   const regularSeasonComplete = room.currentRound >= room.settings.rounds;
@@ -313,7 +311,6 @@ export default function RoundReveal({
           isHost={isHost}
           onPlayClip={(clip: PlayedClip) => onPlayClip(clip)}
           onStopClip={onStopClip}
-          onOpenCoverBrowser={onOpenCoverBrowser}
           showSharedPlayer={false}
         />
       )}
