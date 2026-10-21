@@ -13,9 +13,16 @@ interface GameScreenProps {
   playerId: string;
   onVote: (choiceIndex: number) => void;
   onAudioReady: () => void;
+  onTimerExpired?: () => void;
 }
 
-export default function GameScreen({ room, playerId, onVote, onAudioReady }: GameScreenProps) {
+export default function GameScreen({
+  room,
+  playerId,
+  onVote,
+  onAudioReady,
+  onTimerExpired,
+}: GameScreenProps) {
   const round = room.round!;
   const gameMode = room.settings.gameMode ?? DEFAULT_GAME_MODE;
   const isAiMode = gameMode === "isThisAi" || round.mediaType === "youtube";
@@ -94,6 +101,7 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
         <RoundTimer
           timerSeconds={round.timerSeconds}
           roundStartTime={round.roundStartTime}
+          onExpire={onTimerExpired}
         />
       </div>
 

@@ -1,15 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import type { ReviewPlayback } from "@/types/game";
 import { youtubeWatchUrl } from "@/lib/isThisAiSongs";
-import {
-  bindYoutubeListening,
-  isLikelyMobile,
-  youtubeEmbedUrl,
-  youtubeUnmuteAndPlay,
-} from "@/lib/youtubeEmbed";
+import { youtubeEmbedUrl } from "@/lib/youtubeEmbed";
 
 interface SharedReviewPlayerProps {
   playback: ReviewPlayback | null | undefined;
@@ -17,45 +12,35 @@ interface SharedReviewPlayerProps {
   onStop?: () => void;
 }
 
-/** Single room-wide YouTube embed so only one clip plays at a time. */
+/** Single room-wide YouTube embed — requires Tap to play for mobile sound. */
 export default function SharedReviewPlayer({
   playback,
   isHost,
   onStop,
 }: SharedReviewPlayerProps) {
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const [needsSoundTap, setNeedsSoundTap] = useState(false);
+  const [embedSrc, setEmbedSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!playback) {
-      setNeedsSoundTap(false);
-      return;
-    }
-    // Host started via a gesture on their device; guests (and often mobile host
-    // after a socket round-trip) still need a tap to unmute.
-    setNeedsSoundTap(true);
+    setEmbedSrc(null);
   }, [playback?.youtubeVideoId, playback?.nonce]);
 
-  const handleSoundTap = useCallback(() => {
-    const iframe = iframeRef.current;
-    bindYoutubeListening(iframe);
-    youtubeUnmuteAndPlay(iframe);
-    setNeedsSoundTap(false);
-  }, []);
+  const handlePlay = useCallback(() => {
+    if (!playback) return;
+    setEmbedSrc(
+      youtubeEmbedUrl(playback.youtubeVideoId, {
+        startSec: playback.snippetStart,
+        durationSec: playback.snippetDuration,
+        mute: false,
+        autoplay: true,
+      })
+    );
+  }, [playback]);
 
   if (!playback) return null;
 
   const thumb =
     playback.artworkUrl ||
     `https://img.youtube.com/vi/${playback.youtubeVideoId}/hqdefault.jpg`;
-
-  // Start muted so mobile can autoplay; unmute happens on Tap for sound.
-  const embedSrc = youtubeEmbedUrl(playback.youtubeVideoId, {
-    startSec: playback.snippetStart,
-    durationSec: playback.snippetDuration,
-    mute: true,
-    autoplay: true,
-  });
 
   return (
     <section className="w-full glass rounded-2xl overflow-hidden border border-vinyl-accent/30">
@@ -72,7 +57,15 @@ export default function SharedReviewPlayer({
           </p>
         </div>
         <div className="flex flex-col gap-1 shrink-0">
-          {isHost && onStop && (
+          {!embedSrc ? (
+            <button
+              type="button"
+              className="text-xs px-2.5 py-1 rounded-full bg-vinyl-accent text-black font-semibold"
+              onClick={handlePlay}
+            >
+              Play
+            </button>
+          ) : isHost && onStop ? (
             <button
               type="button"
               className="text-xs px-2.5 py-1 rounded-full bg-vinyl-accent/20 text-vinyl-accent font-semibold"
@@ -80,7 +73,7 @@ export default function SharedReviewPlayer({
             >
               Stop
             </button>
-          )}
+          ) : null}
           <a
             href={youtubeWatchUrl(playback.youtubeVideoId)}
             target="_blank"
@@ -91,37 +84,27 @@ export default function SharedReviewPlayer({
           </a>
         </div>
       </div>
-      <div className="relative w-full aspect-video bg-black">
-        <iframe
-          ref={iframeRef}
-          key={`${playback.youtubeVideoId}-${playback.nonce}`}
-          src={embedSrc}
-          title={playback.title}
-          className="absolute inset-0 w-full h-full"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          referrerPolicy="strict-origin-when-cross-origin"
-          onLoad={() => {
-            // Desktop: try unmute immediately; mobile keeps the tap prompt.
-            if (!isLikelyMobile()) {
-              youtubeUnmuteAndPlay(iframeRef.current);
-              setNeedsSoundTap(false);
-            }
-          }}
-        />
-        {needsSoundTap && (
-          <button
-            type="button"
-            onClick={handleSoundTap}
-            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/70 touch-manipulation"
-          >
-            <span className="px-4 py-2 rounded-full bg-vinyl-accent text-black font-semibold text-sm">
-              Tap for sound
-            </span>
-            <span className="text-xs text-white/70">Required on phones</span>
-          </button>
-        )}
-      </div>
+      {embedSrc ? (
+        <div className="relative w-full aspect-video bg-black">
+          <iframe
+            key={embedSrc}
+            src={embedSrc}
+            title={playback.title}
+            className="absolute inset-0 w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={handlePlay}
+          className="w-full py-6 text-sm text-gray-400 hover:text-white bg-black/40 touch-manipulation"
+        >
+          Tap to play ~30s clip
+        </button>
+      )}
     </section>
   );
 }

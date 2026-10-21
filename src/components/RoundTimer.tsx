@@ -31,6 +31,11 @@ export default function RoundTimer({
 
     const tick = () => {
       const elapsed = elapsedServerSeconds(anchor, roundStartTime);
+      // Round start can be slightly in the future (audioPlayAt); don't count yet.
+      if (elapsed < 0) {
+        setRemaining(timerSeconds);
+        return;
+      }
       const left = Math.max(0, timerSeconds - elapsed);
       setRemaining(Math.ceil(left));
       if (left <= 0 && !expiredRef.current) {

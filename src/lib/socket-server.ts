@@ -138,14 +138,16 @@ function beginRoundAudio(io: Server, room: RoomState) {
 
   clearAudioSyncTimer(room.code);
   const now = Date.now();
-  room.round.audioPlayAt = now + AUDIO_PLAY_DELAY_MS;
-  room.round.roundStartTime = now;
+  const playAt = now + AUDIO_PLAY_DELAY_MS;
+  room.round.audioPlayAt = playAt;
+  // Timer counts from when audio should start so UI hits 0 when the round ends.
+  room.round.roundStartTime = playAt;
 
   clearRoundTimer(room.code);
   const timerSeconds = room.round.timerSeconds || ROUND_TIMER_SECONDS;
   const timer = setTimeout(() => {
     endRound(io, room.code);
-  }, timerSeconds * 1000 + AUDIO_PLAY_DELAY_MS);
+  }, AUDIO_PLAY_DELAY_MS + timerSeconds * 1000);
   roundTimers.set(room.code, timer);
 
   broadcastRoom(io, room);
@@ -168,47 +170,59 @@ function allPlayersVoted(room: RoomState): boolean {
   );
 }
 
-async function endRound(io: Server, code: string) {
+function endRound(io: Server, code: string) {
   const room = getRoom(code);
   if (!room || !room.round || room.phase !== "playing") return;
 
   clearRoundTimer(code);
   clearAudioSyncTimer(code);
 
-  const activeRound = room.round;
-  const result = calculateRoundScores(activeRound, room.players);
+  try {
+    const activeRound = room.round;
+    const result = calculateRoundScores(activeRound, room.players);
 
-  if (activeRound.mediaType === "youtube" && activeRound.youtubeVideoId) {
-    const clip = getAiClipById(activeRound.trackId);
-    const aiLabel = clip?.aiLabel ?? (activeRound.correctAnswer === "AI" ? "AI" : "Human");
-    result.aiLabel = aiLabel;
-    result.songTitle = clip?.name ?? activeRound.correctEnglish;
-    result.songArtist = clip?.english ?? "";
-    result.youtubeVideoId = activeRound.youtubeVideoId;
+    if (activeRound.mediaType === "youtube" && activeRound.youtubeVideoId) {
+      const clip = getAiClipById(activeRound.trackId);
+      const aiLabel =
+        clip?.aiLabel ?? (activeRound.correctAnswer === "AI" ? "AI" : "Human");
+      result.aiLabel = aiLabel;
+      result.songTitle = clip?.name ?? activeRound.correctEnglish;
+      result.songArtist = clip?.english ?? "";
+      result.youtubeVideoId = activeRound.youtubeVideoId;
 
-    room.playedClips = room.playedClips ?? [];
-    room.playedClips.push({
-      roundNumber: activeRound.roundNumber,
-      aiLabel,
-      title: result.songTitle,
-      artist: result.songArtist,
-      youtubeVideoId: activeRound.youtubeVideoId,
-      youtubeUrl: youtubeWatchUrl(activeRound.youtubeVideoId),
-      artworkUrl: activeRound.artworkUrl,
-      snippetStart: activeRound.snippetStart,
-      snippetDuration: activeRound.snippetDuration,
+      room.playedClips = room.playedClips ?? [];
+      room.playedClips.push({
+        roundNumber: activeRound.roundNumber,
+        aiLabel,
+        title: result.songTitle,
+        artist: result.songArtist,
+        youtubeVideoId: activeRound.youtubeVideoId,
+        youtubeUrl: youtubeWatchUrl(activeRound.youtubeVideoId),
+        artworkUrl: activeRound.artworkUrl,
+        snippetStart: activeRound.snippetStart,
+        snippetDuration: activeRound.snippetDuration,
+      });
+    }
+
+    room.roundResult = result;
+
+    room.players.forEach((p) => {
+      p.score += result.scoresEarned[p.id] ?? 0;
     });
+
+    room.phase = "roundEnd";
+    room.round = undefined;
+    broadcastRoom(io, room);
+  } catch (err) {
+    console.error("endRound failed:", err);
+    // Still advance so clients never stall on 0s.
+    room.phase = "roundEnd";
+    if (!room.roundResult && room.round) {
+      room.roundResult = calculateRoundScores(room.round, room.players);
+    }
+    room.round = undefined;
+    broadcastRoom(io, room);
   }
-
-  room.roundResult = result;
-
-  room.players.forEach((p) => {
-    p.score += result.scoresEarned[p.id] ?? 0;
-  });
-
-  room.phase = "roundEnd";
-  room.round = undefined;
-  broadcastRoom(io, room);
 }
 
 async function startNextRound(io: Server, code: string) {
@@ -631,16 +645,36 @@ export function initSocketServer(httpServer: HttpServer): Server {
 
       if (room.round.votes[currentPlayerId] !== undefined) return;
 
-      room.round.votes[currentPlayerId] = choiceIndex;
+      const index = Number(choiceIndex);
+      if (!Number.isInteger(index) || index < 0 || index >= room.round.choices.length) {
+        return;
+      }
+
+      room.round.votes[currentPlayerId] = index;
       room.round.voteTimes[currentPlayerId] = Date.now();
 
-      room.players.forEach((p) => {
-        io.to(p.socketId).emit("room:update", toClientView(room, p.id));
-      });
+      broadcastRoom(io, room);
 
       if (allPlayersVoted(room)) {
         endRound(io, room.code);
       }
+    });
+
+    /** Client timer hit 0 — backup if the server timeout was lost (dev HMR, etc.). */
+    socket.on("game:timerExpired", () => {
+      if (!currentPlayerId) return;
+      const roomCode = playerToRoom.get(currentPlayerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      if (!room || !room.round || room.phase !== "playing") return;
+      if (room.round.audioPlayAt <= 0) return;
+
+      const elapsed = Date.now() - room.round.roundStartTime;
+      const limitMs = (room.round.timerSeconds || ROUND_TIMER_SECONDS) * 1000;
+      // Allow a little early (clock skew) so clients aren't stuck at 0s.
+      if (elapsed < limitMs - 1500) return;
+
+      endRound(io, room.code);
     });
 
     socket.on("game:nextRound", async () => {

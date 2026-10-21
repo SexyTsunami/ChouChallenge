@@ -102,6 +102,10 @@ export function useGameSocket() {
     socketRef.current?.emit("game:nextRound");
   }, []);
 
+  const signalTimerExpired = useCallback(() => {
+    socketRef.current?.emit("game:timerExpired");
+  }, []);
+
   const returnToLobby = useCallback(() => {
     socketRef.current?.emit("game:returnToLobby");
   }, []);
@@ -153,6 +157,7 @@ export function useGameSocket() {
     submitVote,
     signalAudioReady,
     nextRound,
+    signalTimerExpired,
     returnToLobby,
     playReviewClip,
     stopReviewClip,
