@@ -13,18 +13,18 @@ interface YouTubeClipReplayProps {
   snippetDuration?: number;
   roundNumber?: number;
   compact?: boolean;
-  /** Host-driven synced playback (reveal / cover browser). */
   hostControlled?: boolean;
   isHost?: boolean;
-  /** True when this clip is the room's active reviewPlayback. */
   isActive?: boolean;
   onHostPlay?: () => void;
   onHostStop?: () => void;
+  /** Only after final score / cover browser. */
+  showYouTubeLink?: boolean;
 }
 
 /**
- * Clip row with host play controls. Video itself plays in SharedReviewPlayer
- * so the room never stacks multiple embeds.
+ * Clip row with host queue controls. Actual playback is in SharedReviewPlayer
+ * so every device taps Play on the shared countdown.
  */
 export default function YouTubeClipReplay({
   youtubeVideoId,
@@ -39,6 +39,7 @@ export default function YouTubeClipReplay({
   isActive = false,
   onHostPlay,
   onHostStop,
+  showYouTubeLink = false,
 }: YouTubeClipReplayProps) {
   const watchUrl = youtubeWatchUrl(youtubeVideoId);
   const thumb = artworkUrl || `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`;
@@ -77,7 +78,7 @@ export default function YouTubeClipReplay({
                   className="text-xs px-2.5 py-1 rounded-full bg-vinyl-accent/20 text-vinyl-accent font-semibold"
                   onClick={handlePlayToggle}
                 >
-                  {isActive ? "Stop clip" : "Play clip"}
+                  {isActive ? "Stop for all" : "Play for group"}
                 </button>
               ) : (
                 <span
@@ -87,18 +88,20 @@ export default function YouTubeClipReplay({
                       : "bg-vinyl-surface text-gray-500"
                   }`}
                 >
-                  {isActive ? "Playing…" : "Host controls playback"}
+                  {isActive ? "Queued — tap Play above" : "Host picks the clip"}
                 </span>
               )
             ) : null}
-            <a
-              href={watchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs px-2.5 py-1 rounded-full bg-vinyl-surface text-gray-300 hover:text-white"
-            >
-              Open on YouTube
-            </a>
+            {showYouTubeLink && (
+              <a
+                href={watchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs px-2.5 py-1 rounded-full bg-vinyl-surface text-gray-300 hover:text-white"
+              >
+                Open on YouTube
+              </a>
+            )}
           </div>
         </div>
       </div>

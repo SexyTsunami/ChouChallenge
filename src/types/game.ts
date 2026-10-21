@@ -128,6 +128,12 @@ export interface ReviewPlayback {
   snippetDuration: number;
   /** Bumps when host (re)starts a clip so clients remount the embed. */
   nonce: number;
+  /**
+   * Server time when every device should unlock Play.
+   * Each client must tap Play themselves (mobile autoplay policy) —
+   * unlocking at the same moment keeps the group roughly in sync.
+   */
+  audioPlayAt: number;
 }
 
 export type RoomPhase = "lobby" | "playing" | "roundEnd" | "gameOver";
@@ -187,8 +193,10 @@ export const SNIPPET_LOOPS = 3;
 export const LOOP_PAUSE_MS = 400;
 /** Max wait for all players to preload audio before starting anyway */
 export const AUDIO_SYNC_MAX_WAIT_MS = 12000;
-/** Countdown after sync before the first snippet plays */
-export const AUDIO_PLAY_DELAY_MS = 2000;
+/** Countdown after sync before the Play button unlocks for everyone */
+export const AUDIO_PLAY_DELAY_MS = 3000;
+/** Countdown after host queues a review clip before Play unlocks for everyone */
+export const REVIEW_PLAY_DELAY_MS = 3000;
 
 /** Points by placement for correct answers (1st through 4th, fastest first) */
 export const PLACEMENT_POINTS = [100, 75, 50, 25];

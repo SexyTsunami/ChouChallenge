@@ -61,6 +61,7 @@ function ClipRow({
       }
       onHostStop={onStopClip}
       compact
+      showYouTubeLink
     />
   );
 }
@@ -85,13 +86,18 @@ export default function CoverBrowserScreen({
         <h1 className="font-display text-2xl font-bold mt-1">Is This AI?</h1>
         <p className="text-xs text-gray-500 mt-2">
           {isHost
-            ? "Play ~30s clips for the group — everyone hears what you pick."
-            : "Host is picking clips for the group to hear."}
+            ? "Queue a clip — everyone taps ▶ Play together after the countdown."
+            : "Host queues a clip — tap ▶ Play with the group when it unlocks."}
         </p>
       </header>
 
       <div className="sticky top-2 z-20">
-        <SharedReviewPlayer playback={playback} isHost={isHost} onStop={onStopClip} />
+        <SharedReviewPlayer
+          playback={playback}
+          isHost={isHost}
+          onStop={onStopClip}
+          showYouTubeLink
+        />
       </div>
 
       <section className="space-y-3">

@@ -38,6 +38,7 @@ import {
   MAX_ROUNDS,
   MIN_CHOICES,
   MIN_ROUNDS,
+  REVIEW_PLAY_DELAY_MS,
   ROUND_TIMER_SECONDS,
 } from "@/types/game";
 
@@ -756,6 +757,7 @@ export function initSocketServer(httpServer: HttpServer): Server {
       if (!payload?.youtubeVideoId || typeof payload.youtubeVideoId !== "string") return;
 
       const catalog = getAiClipById(`yt-${payload.youtubeVideoId}`);
+      const now = Date.now();
       const next: ReviewPlayback = {
         youtubeVideoId: payload.youtubeVideoId,
         title: payload.title || catalog?.name || "Clip",
@@ -770,7 +772,9 @@ export function initSocketServer(httpServer: HttpServer): Server {
           1,
           Math.floor(payload.snippetDuration ?? AI_CLIP_DURATION_SEC)
         ),
-        nonce: Date.now(),
+        nonce: now,
+        // Everyone unlocks Play at the same server time (each device still taps).
+        audioPlayAt: now + REVIEW_PLAY_DELAY_MS,
       };
       room.reviewPlayback = next;
       broadcastRoom(io, room);

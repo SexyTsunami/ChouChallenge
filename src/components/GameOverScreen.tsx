@@ -96,6 +96,7 @@ export default function GameOverScreen({
           onPlayClip={(clip: PlayedClip) => onPlayClip(clip)}
           onStopClip={onStopClip}
           onOpenCoverBrowser={onOpenCoverBrowser}
+          showYouTubeLink
         />
       )}
 

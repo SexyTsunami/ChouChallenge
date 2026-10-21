@@ -1,11 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  isLikelyMobile,
-  startYoutubeInGesture,
-  stopYoutubeIframe,
-} from "@/lib/youtubeEmbed";
+import { startYoutubeInGesture, stopYoutubeIframe } from "@/lib/youtubeEmbed";
 import { useServerClockAnchor } from "@/hooks/useServerClockAnchor";
 import { msUntilServerTime } from "@/lib/serverClock";
 
@@ -30,9 +26,10 @@ const EQ_ANIMATIONS = [
 ];
 
 /**
- * Audio-focused YouTube clip for guessing.
- * Iframe stays mounted; Play sets src inside the tap (required for mobile sound).
- * Overlay always captures taps so YouTube never steals navigation.
+ * Mobile-first YouTube clip for guessing.
+ * 1) Everyone taps Sync
+ * 2) Shared countdown until audioPlayAt
+ * 3) Everyone taps ▶ Play together (no desktop autoplay — keeps phones fair)
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -50,9 +47,10 @@ export default function YouTubeClipPlayer({
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasSynced, setHasSynced] = useState(false);
   const [clipStarted, setClipStarted] = useState(false);
-  const [awaitingPlayTap, setAwaitingPlayTap] = useState(false);
+  const [playUnlocked, setPlayUnlocked] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const clockAnchor = useServerClockAnchor(roundStartTime);
+  const clockAnchor = useServerClockAnchor(audioPlayAt > 0 ? audioPlayAt : roundStartTime);
 
   const clearStopTimer = () => {
     if (stopTimerRef.current) {
@@ -72,7 +70,8 @@ export default function YouTubeClipPlayer({
     readySignaledRef.current = false;
     setHasSynced(false);
     setClipStarted(false);
-    setAwaitingPlayTap(false);
+    setPlayUnlocked(false);
+    setCountdown(0);
     setIsPlaying(false);
     clearStopTimer();
     stopYoutubeIframe(iframeRef.current);
@@ -85,22 +84,25 @@ export default function YouTubeClipPlayer({
     };
   }, []);
 
+  // Shared countdown — Play unlocks on every device at the same server time.
   useEffect(() => {
     if (!hasSynced || audioPlayAt <= 0 || clipStarted) return;
 
-    const delay = clockAnchor
-      ? msUntilServerTime(clockAnchor, audioPlayAt)
-      : Math.max(0, audioPlayAt - Date.now());
+    const tick = () => {
+      const msLeft = clockAnchor
+        ? msUntilServerTime(clockAnchor, audioPlayAt)
+        : Math.max(0, audioPlayAt - Date.now());
+      setCountdown(Math.ceil(msLeft / 1000));
+      if (msLeft <= 0) setPlayUnlocked(true);
+    };
 
-    const startTimeout = setTimeout(() => {
-      setAwaitingPlayTap(true);
-    }, delay);
-
-    return () => clearTimeout(startTimeout);
+    tick();
+    const id = window.setInterval(tick, 100);
+    return () => clearInterval(id);
   }, [hasSynced, audioPlayAt, clockAnchor, clipStarted]);
 
   const handlePlayClip = useCallback(() => {
-    if (clipStarted) return;
+    if (clipStarted || !playUnlocked) return;
 
     const ok = startYoutubeInGesture(iframeRef.current, youtubeVideoId, {
       startSec: snippetStart,
@@ -112,7 +114,6 @@ export default function YouTubeClipPlayer({
     if (!ok) return;
 
     setClipStarted(true);
-    setAwaitingPlayTap(false);
     setIsPlaying(true);
 
     clearStopTimer();
@@ -120,29 +121,26 @@ export default function YouTubeClipPlayer({
       setIsPlaying(false);
       stopYoutubeIframe(iframeRef.current);
     }, snippetDuration * 1000 + 500);
-  }, [clipStarted, youtubeVideoId, snippetStart, snippetDuration]);
-
-  // Desktop: start when the group is ready (autoplay with sound usually works).
-  useEffect(() => {
-    if (!awaitingPlayTap || clipStarted || isLikelyMobile()) return;
-    handlePlayClip();
-  }, [awaitingPlayTap, clipStarted, handlePlayClip]);
+  }, [clipStarted, playUnlocked, youtubeVideoId, snippetStart, snippetDuration]);
 
   const showTapPrompt = !hasSynced;
   const showWaiting = hasSynced && audioSyncing;
-  const showPlayPrompt = awaitingPlayTap && !clipStarted;
+  const showCountdown = hasSynced && !audioSyncing && !playUnlocked && !clipStarted;
+  const showPlayPrompt = playUnlocked && !clipStarted;
 
   const statusText = showTapPrompt
     ? `Tap to sync (${syncReadyCount}/${syncTotalPlayers})`
     : showWaiting
       ? `Waiting for players… (${syncReadyCount}/${syncTotalPlayers})`
-      : showPlayPrompt
-        ? "Tap Play clip below"
-        : isPlaying
-          ? "Now Playing"
-          : clipStarted
-            ? "Clip finished"
-            : "Listen closely…";
+      : showCountdown
+        ? `Play unlocks in ${Math.max(1, countdown)}…`
+        : showPlayPrompt
+          ? "▶ Tap Play together!"
+          : isPlaying
+            ? "Now Playing"
+            : clipStarted
+              ? "Clip finished"
+              : "Listen closely…";
 
   const onPanelActivate = () => {
     if (showTapPrompt) signalSynced();
@@ -152,7 +150,6 @@ export default function YouTubeClipPlayer({
   return (
     <div className="flex flex-col items-center gap-3 w-full">
       <div className="relative w-full max-w-xs aspect-video rounded-2xl overflow-hidden bg-black ring-1 ring-vinyl-border">
-        {/* pointer-events-none: never open YouTube / steal taps */}
         <iframe
           ref={iframeRef}
           title="YouTube audio clip"
@@ -169,7 +166,6 @@ export default function YouTubeClipPlayer({
           referrerPolicy="strict-origin-when-cross-origin"
         />
 
-        {/* Always intercept taps — never let them reach the iframe */}
         <button
           type="button"
           disabled={!showTapPrompt && !showPlayPrompt}
@@ -181,13 +177,18 @@ export default function YouTubeClipPlayer({
             showTapPrompt ? "Tap to sync" : showPlayPrompt ? "Play clip" : "Now playing"
           }
         >
+          {showCountdown && (
+            <span className="text-5xl font-mono font-bold text-vinyl-accent">
+              {Math.max(1, countdown)}
+            </span>
+          )}
           <div className="flex items-center gap-3 px-5 py-3 rounded-2xl glass pointer-events-none">
             <div className="relative flex-shrink-0">
               <div
                 className={`w-3 h-3 rounded-full transition-colors duration-300 ${
                   isPlaying
                     ? "bg-vinyl-accent"
-                    : showTapPrompt || showWaiting || showPlayPrompt
+                    : showTapPrompt || showWaiting || showCountdown || showPlayPrompt
                       ? "bg-amber-400"
                       : "bg-gray-600"
                 }`}
@@ -195,9 +196,10 @@ export default function YouTubeClipPlayer({
               {isPlaying && (
                 <span className="absolute inset-0 rounded-full bg-vinyl-accent animate-ping opacity-60" />
               )}
-              {(showTapPrompt || showWaiting || showPlayPrompt) && !isPlaying && (
-                <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-40" />
-              )}
+              {(showTapPrompt || showWaiting || showCountdown || showPlayPrompt) &&
+                !isPlaying && (
+                  <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-40" />
+                )}
             </div>
 
             <div className="flex items-end gap-[3px] h-6 overflow-hidden">
@@ -207,14 +209,14 @@ export default function YouTubeClipPlayer({
                   className={`w-1.5 rounded-sm origin-bottom transition-colors duration-300 ${
                     isPlaying
                       ? `bg-vinyl-accent ${anim}`
-                      : showTapPrompt || showWaiting || showPlayPrompt
+                      : showTapPrompt || showWaiting || showCountdown || showPlayPrompt
                         ? "bg-amber-400/70"
                         : "bg-gray-600"
                   }`}
                   style={{
                     height: isPlaying
                       ? "24px"
-                      : showTapPrompt || showWaiting || showPlayPrompt
+                      : showTapPrompt || showWaiting || showCountdown || showPlayPrompt
                         ? "12px"
                         : "3px",
                   }}
@@ -226,7 +228,7 @@ export default function YouTubeClipPlayer({
               className={`text-xs font-medium tracking-wide transition-colors duration-300 ${
                 isPlaying
                   ? "text-vinyl-accent"
-                  : showTapPrompt || showWaiting || showPlayPrompt
+                  : showTapPrompt || showWaiting || showCountdown || showPlayPrompt
                     ? "text-amber-400"
                     : "text-gray-500"
               }`}
@@ -238,8 +240,10 @@ export default function YouTubeClipPlayer({
             {isPlaying
               ? "Listening… (video hidden)"
               : showPlayPrompt
-                ? "Tap here or the button below"
-                : "Audio only"}
+                ? "Everyone tap Play now"
+                : showCountdown
+                  ? "Get ready — same moment for all devices"
+                  : "Audio only"}
           </p>
         </button>
       </div>
@@ -258,9 +262,9 @@ export default function YouTubeClipPlayer({
         <button
           type="button"
           onClick={handlePlayClip}
-          className="w-full max-w-xs py-4 rounded-full font-bold text-base btn-primary touch-manipulation shadow-lg"
+          className="w-full max-w-xs py-4 rounded-full font-bold text-base btn-primary touch-manipulation shadow-lg animate-pulse"
         >
-          ▶ Play clip
+          ▶ Play clip together
         </button>
       )}
 
@@ -268,10 +272,12 @@ export default function YouTubeClipPlayer({
         {showTapPrompt
           ? "Everyone taps to sync first."
           : showWaiting
-            ? "Almost there…"
-            : showPlayPrompt
-              ? "Tap ▶ Play clip for sound (required on phones)."
-              : "Guess AI or Human — video reveals after the round."}
+            ? "Waiting for the rest of the group…"
+            : showCountdown
+              ? "Play unlocks at the same time on every phone & desktop."
+              : showPlayPrompt
+                ? "Tap ▶ together — required for fair sound on phones."
+                : "Guess AI or Human — video reveals after the round."}
       </p>
     </div>
   );

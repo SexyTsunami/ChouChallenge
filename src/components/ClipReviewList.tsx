@@ -14,6 +14,7 @@ interface ClipReviewListProps {
   heading?: string;
   /** When false, parent already renders SharedReviewPlayer. */
   showSharedPlayer?: boolean;
+  showYouTubeLink?: boolean;
 }
 
 export default function ClipReviewList({
@@ -25,11 +26,17 @@ export default function ClipReviewList({
   onOpenCoverBrowser,
   heading = "Clips this game (in order)",
   showSharedPlayer = true,
+  showYouTubeLink = false,
 }: ClipReviewListProps) {
   return (
     <section className="w-full glass rounded-2xl p-4 space-y-3">
       {showSharedPlayer && (
-        <SharedReviewPlayer playback={playback} isHost={isHost} onStop={onStopClip} />
+        <SharedReviewPlayer
+          playback={playback}
+          isHost={isHost}
+          onStop={onStopClip}
+          showYouTubeLink={showYouTubeLink}
+        />
       )}
       {clips.length > 0 && (
         <>
@@ -38,8 +45,8 @@ export default function ClipReviewList({
           </h2>
           <p className="text-xs text-gray-500 text-center">
             {isHost
-              ? "Only you can start clips — everyone in the room hears them."
-              : "Host picks which clips to play for the group."}
+              ? "Queue a clip — everyone taps ▶ Play together when the countdown ends."
+              : "Host queues a clip — watch for ▶ Play with the group above."}
           </p>
           {clips.map((clip) => {
             const active = playback?.youtubeVideoId === clip.youtubeVideoId;
@@ -60,6 +67,7 @@ export default function ClipReviewList({
                 isActive={active}
                 onHostPlay={() => onPlayClip(clip)}
                 onHostStop={onStopClip}
+                showYouTubeLink={showYouTubeLink}
               />
             );
           })}

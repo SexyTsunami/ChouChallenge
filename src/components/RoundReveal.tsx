@@ -207,7 +207,12 @@ export default function RoundReveal({
       </div>
 
       {isAiMode && (
-        <SharedReviewPlayer playback={playback} isHost={isHost} onStop={onStopClip} />
+        <SharedReviewPlayer
+          playback={playback}
+          isHost={isHost}
+          onStop={onStopClip}
+          showYouTubeLink={false}
+        />
       )}
 
       {isAiMode && result.youtubeVideoId && (
@@ -223,6 +228,7 @@ export default function RoundReveal({
           hostControlled
           isHost={isHost}
           isActive={currentClipActive}
+          showYouTubeLink={false}
           onHostPlay={() =>
             onPlayClip({
               youtubeVideoId: result.youtubeVideoId!,
