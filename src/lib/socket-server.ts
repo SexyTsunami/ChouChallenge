@@ -11,14 +11,22 @@ import {
   pickTrackWithPreview,
   randomSnippetParams,
 } from "./itunes";
+import {
+  AI_OR_HUMAN_CHOICES,
+  getAiClipById,
+  youtubeWatchUrl,
+} from "./isThisAiSongs";
 import { getTracksForMode, isValidGameMode } from "./tracks";
 import { importPlaylistFromUrl } from "./playlistImport";
 import type {
   ClientRoomView,
   Player,
+  ReviewPlayback,
   RoomState,
 } from "@/types/game";
 import {
+  AI_CLIP_DURATION_SEC,
+  AI_ROUND_TIMER_SECONDS,
   AUDIO_PLAY_DELAY_MS,
   AUDIO_SYNC_MAX_WAIT_MS,
   DEFAULT_CHOICES,
@@ -32,6 +40,16 @@ import {
   MIN_ROUNDS,
   ROUND_TIMER_SECONDS,
 } from "@/types/game";
+
+type ReviewPlayPayload = {
+  youtubeVideoId: string;
+  title?: string;
+  artist?: string;
+  aiLabel?: "AI" | "Human";
+  artworkUrl?: string;
+  snippetStart?: number;
+  snippetDuration?: number;
+};
 
 const rooms = new Map<string, RoomState>();
 const playerToRoom = new Map<string, string>();
@@ -56,6 +74,10 @@ function toClientView(room: RoomState, playerId: string): ClientRoomView {
     playlistError: room.playlistError,
     tracks: room.tracks.map(({ id, name, english }) => ({ id, name, english })),
     roundResult: room.roundResult,
+    playedClips: room.playedClips ?? [],
+    usedTrackIds: room.usedTrackIds ?? [],
+    reviewPlayback: room.reviewPlayback ?? null,
+    showCoverBrowser: room.showCoverBrowser ?? false,
   };
 
   if (room.round && room.phase === "playing") {
@@ -77,6 +99,8 @@ function toClientView(room: RoomState, playerId: string): ClientRoomView {
       syncTotalPlayers: room.players.length,
       hasVoted,
       myVote: hasVoted ? myVote : null,
+      mediaType: room.round.mediaType ?? "preview",
+      youtubeVideoId: room.round.youtubeVideoId,
     };
   }
 
@@ -118,9 +142,10 @@ function beginRoundAudio(io: Server, room: RoomState) {
   room.round.roundStartTime = now;
 
   clearRoundTimer(room.code);
+  const timerSeconds = room.round.timerSeconds || ROUND_TIMER_SECONDS;
   const timer = setTimeout(() => {
     endRound(io, room.code);
-  }, ROUND_TIMER_SECONDS * 1000 + AUDIO_PLAY_DELAY_MS);
+  }, timerSeconds * 1000 + AUDIO_PLAY_DELAY_MS);
   roundTimers.set(room.code, timer);
 
   broadcastRoom(io, room);
@@ -150,7 +175,31 @@ async function endRound(io: Server, code: string) {
   clearRoundTimer(code);
   clearAudioSyncTimer(code);
 
-  const result = calculateRoundScores(room.round, room.players);
+  const activeRound = room.round;
+  const result = calculateRoundScores(activeRound, room.players);
+
+  if (activeRound.mediaType === "youtube" && activeRound.youtubeVideoId) {
+    const clip = getAiClipById(activeRound.trackId);
+    const aiLabel = clip?.aiLabel ?? (activeRound.correctAnswer === "AI" ? "AI" : "Human");
+    result.aiLabel = aiLabel;
+    result.songTitle = clip?.name ?? activeRound.correctEnglish;
+    result.songArtist = clip?.english ?? "";
+    result.youtubeVideoId = activeRound.youtubeVideoId;
+
+    room.playedClips = room.playedClips ?? [];
+    room.playedClips.push({
+      roundNumber: activeRound.roundNumber,
+      aiLabel,
+      title: result.songTitle,
+      artist: result.songArtist,
+      youtubeVideoId: activeRound.youtubeVideoId,
+      youtubeUrl: youtubeWatchUrl(activeRound.youtubeVideoId),
+      artworkUrl: activeRound.artworkUrl,
+      snippetStart: activeRound.snippetStart,
+      snippetDuration: activeRound.snippetDuration,
+    });
+  }
+
   room.roundResult = result;
 
   room.players.forEach((p) => {
@@ -171,10 +220,14 @@ async function startNextRound(io: Server, code: string) {
   const tracks =
     gameMode === "custom" ? room.tracks : getTracksForMode(gameMode);
   room.tracks = tracks;
+  room.usedTrackIds = room.usedTrackIds ?? [];
+  room.playedClips = room.playedClips ?? [];
 
-  const choiceCount = room.settings.choiceCount ?? DEFAULT_CHOICES;
+  const isAiMode = gameMode === "isThisAi";
+  const choiceCount = isAiMode ? 2 : room.settings.choiceCount ?? DEFAULT_CHOICES;
+  const minTracks = isAiMode ? 1 : choiceCount;
 
-  if (tracks.length < choiceCount) {
+  if (tracks.length < minTracks) {
     const host = room.players.find((p) => p.id === room.hostId);
     if (host) {
       io.to(host.socketId).emit("error", {
@@ -188,46 +241,87 @@ async function startNextRound(io: Server, code: string) {
 
   room.currentRound += 1;
 
-  const resolved = await pickTrackWithPreview(tracks, gameMode);
-  if (!resolved) {
-    const host = room.players.find((p) => p.id === room.hostId);
-    if (host) {
-      io.to(host.socketId).emit("error", {
-        message: "Could not load audio previews from iTunes. Try again.",
-      });
-    }
-    room.currentRound -= 1;
-    room.phase = "lobby";
-    broadcastRoom(io, room);
-    return;
-  }
-
-  const { track, previewUrl, artworkUrl } = resolved;
-  const { choices, correctIndex } = buildChoices(track, tracks, choiceCount);
-  const { snippetStart, snippetDuration } = randomSnippetParams();
   const audioReady: Record<string, boolean> = {};
   room.players.forEach((p) => {
     audioReady[p.id] = false;
   });
 
-  room.round = {
-    roundNumber: room.currentRound,
-    trackId: track.id,
-    correctAnswer: track.name,
-    correctEnglish: track.english,
-    correctChoiceIndex: correctIndex,
-    choices,
-    previewUrl,
-    artworkUrl,
-    snippetStart,
-    snippetDuration,
-    votes: {},
-    voteTimes: {},
-    roundStartTime: 0,
-    timerSeconds: ROUND_TIMER_SECONDS,
-    audioPlayAt: 0,
-    audioReady,
-  };
+  if (isAiMode) {
+    const unused = tracks.filter((t) => !room.usedTrackIds.includes(t.id));
+    const pool = unused.length > 0 ? unused : tracks;
+    const track = pool[Math.floor(Math.random() * pool.length)];
+    const clip = getAiClipById(track.id);
+    if (!clip?.youtubeVideoId) {
+      room.currentRound -= 1;
+      room.phase = "lobby";
+      broadcastRoom(io, room);
+      return;
+    }
+
+    room.usedTrackIds.push(track.id);
+    const correctIndex = clip.aiLabel === "AI" ? 0 : 1;
+    const snippetStart = Math.floor(Math.random() * 40);
+    const snippetDuration = AI_CLIP_DURATION_SEC;
+
+    room.round = {
+      roundNumber: room.currentRound,
+      trackId: track.id,
+      correctAnswer: clip.aiLabel,
+      correctEnglish: clip.name,
+      correctChoiceIndex: correctIndex,
+      choices: AI_OR_HUMAN_CHOICES.map((c) => ({ name: c.name, english: c.english })),
+      previewUrl: "",
+      artworkUrl: clip.artworkUrl ?? "",
+      snippetStart,
+      snippetDuration,
+      votes: {},
+      voteTimes: {},
+      roundStartTime: 0,
+      timerSeconds: AI_ROUND_TIMER_SECONDS,
+      audioPlayAt: 0,
+      audioReady,
+      mediaType: "youtube",
+      youtubeVideoId: clip.youtubeVideoId,
+    };
+  } else {
+    const resolved = await pickTrackWithPreview(tracks, gameMode);
+    if (!resolved) {
+      const host = room.players.find((p) => p.id === room.hostId);
+      if (host) {
+        io.to(host.socketId).emit("error", {
+          message: "Could not load audio previews from iTunes. Try again.",
+        });
+      }
+      room.currentRound -= 1;
+      room.phase = "lobby";
+      broadcastRoom(io, room);
+      return;
+    }
+
+    const { track, previewUrl, artworkUrl } = resolved;
+    const { choices, correctIndex } = buildChoices(track, tracks, choiceCount);
+    const { snippetStart, snippetDuration } = randomSnippetParams();
+
+    room.round = {
+      roundNumber: room.currentRound,
+      trackId: track.id,
+      correctAnswer: track.name,
+      correctEnglish: track.english,
+      correctChoiceIndex: correctIndex,
+      choices,
+      previewUrl,
+      artworkUrl,
+      snippetStart,
+      snippetDuration,
+      votes: {},
+      voteTimes: {},
+      roundStartTime: 0,
+      timerSeconds: ROUND_TIMER_SECONDS,
+      audioPlayAt: 0,
+      audioReady,
+      mediaType: "preview",
+    };
+  }
 
   room.phase = "playing";
   room.roundResult = undefined;
@@ -312,6 +406,10 @@ export function initSocketServer(httpServer: HttpServer): Server {
         suddenDeath: false,
         playlistStatus: "idle",
         tracks,
+        playedClips: [],
+        usedTrackIds: [],
+        reviewPlayback: null,
+        showCoverBrowser: false,
       };
 
       rooms.set(code, room);
@@ -505,6 +603,10 @@ export function initSocketServer(httpServer: HttpServer): Server {
       });
       room.currentRound = 0;
       room.suddenDeath = false;
+      room.playedClips = [];
+      room.usedTrackIds = [];
+      room.reviewPlayback = null;
+      room.showCoverBrowser = false;
       await startNextRound(io, room.code);
     });
 
@@ -549,6 +651,9 @@ export function initSocketServer(httpServer: HttpServer): Server {
       if (!room || room.hostId !== currentPlayerId) return;
       if (room.phase !== "roundEnd") return;
 
+      room.reviewPlayback = null;
+      room.showCoverBrowser = false;
+
       const regularSeasonComplete = room.currentRound >= room.settings.rounds;
 
       if (regularSeasonComplete) {
@@ -582,10 +687,79 @@ export function initSocketServer(httpServer: HttpServer): Server {
       room.suddenDeath = false;
       room.round = undefined;
       room.roundResult = undefined;
+      room.playedClips = [];
+      room.usedTrackIds = [];
+      room.reviewPlayback = null;
+      room.showCoverBrowser = false;
       room.players.forEach((p) => {
         p.score = 0;
         p.isReady = false;
       });
+      broadcastRoom(io, room);
+    });
+
+    socket.on("review:playClip", (payload: ReviewPlayPayload) => {
+      if (!currentPlayerId) return;
+      const roomCode = playerToRoom.get(currentPlayerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      if (!room || room.hostId !== currentPlayerId) return;
+      if (room.phase !== "roundEnd" && room.phase !== "gameOver") return;
+      if (!payload?.youtubeVideoId || typeof payload.youtubeVideoId !== "string") return;
+
+      const catalog = getAiClipById(`yt-${payload.youtubeVideoId}`);
+      const next: ReviewPlayback = {
+        youtubeVideoId: payload.youtubeVideoId,
+        title: payload.title || catalog?.name || "Clip",
+        artist: payload.artist || catalog?.english || "",
+        aiLabel: payload.aiLabel || catalog?.aiLabel,
+        artworkUrl:
+          payload.artworkUrl ||
+          catalog?.artworkUrl ||
+          `https://img.youtube.com/vi/${payload.youtubeVideoId}/hqdefault.jpg`,
+        snippetStart: Math.max(0, Math.floor(payload.snippetStart ?? 0)),
+        snippetDuration: Math.max(
+          1,
+          Math.floor(payload.snippetDuration ?? AI_CLIP_DURATION_SEC)
+        ),
+        nonce: Date.now(),
+      };
+      room.reviewPlayback = next;
+      broadcastRoom(io, room);
+    });
+
+    socket.on("review:stopClip", () => {
+      if (!currentPlayerId) return;
+      const roomCode = playerToRoom.get(currentPlayerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      if (!room || room.hostId !== currentPlayerId) return;
+      if (room.phase !== "roundEnd" && room.phase !== "gameOver") return;
+      room.reviewPlayback = null;
+      broadcastRoom(io, room);
+    });
+
+    socket.on("review:openCoverBrowser", () => {
+      if (!currentPlayerId) return;
+      const roomCode = playerToRoom.get(currentPlayerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      if (!room || room.hostId !== currentPlayerId) return;
+      if (room.phase !== "roundEnd" && room.phase !== "gameOver") return;
+      room.showCoverBrowser = true;
+      room.reviewPlayback = null;
+      broadcastRoom(io, room);
+    });
+
+    socket.on("review:closeCoverBrowser", () => {
+      if (!currentPlayerId) return;
+      const roomCode = playerToRoom.get(currentPlayerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      if (!room || room.hostId !== currentPlayerId) return;
+      if (room.phase !== "roundEnd" && room.phase !== "gameOver") return;
+      room.showCoverBrowser = false;
+      room.reviewPlayback = null;
       broadcastRoom(io, room);
     });
 

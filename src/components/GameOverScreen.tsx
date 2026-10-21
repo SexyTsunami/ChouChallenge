@@ -1,13 +1,25 @@
 "use client";
 
-import type { ClientRoomView } from "@/types/game";
+import type { ClientRoomView, PlayedClip } from "@/types/game";
 import VinylRecord from "./VinylRecord";
+import ClipReviewList from "./ClipReviewList";
 
 interface GameOverScreenProps {
   room: ClientRoomView;
   playerId: string;
   isHost: boolean;
   onReturnToLobby: () => void;
+  onPlayClip: (clip: {
+    youtubeVideoId: string;
+    title: string;
+    artist: string;
+    aiLabel?: "AI" | "Human";
+    artworkUrl?: string;
+    snippetStart?: number;
+    snippetDuration?: number;
+  }) => void;
+  onStopClip: () => void;
+  onOpenCoverBrowser: () => void;
 }
 
 const PODIUM_COLORS = ["text-vinyl-gold", "text-vinyl-silver", "text-vinyl-bronze"];
@@ -18,9 +30,14 @@ export default function GameOverScreen({
   playerId,
   isHost,
   onReturnToLobby,
+  onPlayClip,
+  onStopClip,
+  onOpenCoverBrowser,
 }: GameOverScreenProps) {
   const sorted = room.players.slice().sort((a, b) => b.score - a.score);
   const winner = sorted[0];
+  const playedClips = room.playedClips ?? [];
+  const isAiMode = room.settings.gameMode === "isThisAi" || playedClips.length > 0;
 
   return (
     <main className="min-h-dvh px-4 py-8 max-w-lg mx-auto flex flex-col items-center gap-8">
@@ -69,6 +86,18 @@ export default function GameOverScreen({
             ))}
         </div>
       </section>
+
+      {isAiMode && (
+        <ClipReviewList
+          clips={playedClips}
+          playback={room.reviewPlayback}
+          isHost={isHost}
+          heading="Round clips (in order)"
+          onPlayClip={(clip: PlayedClip) => onPlayClip(clip)}
+          onStopClip={onStopClip}
+          onOpenCoverBrowser={onOpenCoverBrowser}
+        />
+      )}
 
       {isHost ? (
         <button className="btn-primary w-full" onClick={onReturnToLobby}>

@@ -5,6 +5,7 @@ import type { ClientRoomView } from "@/types/game";
 import { DEFAULT_GAME_MODE } from "@/types/game";
 import { getSuddenDeathRoundNumber } from "@/lib/gameLogic";
 import SnippetPlayer from "./SnippetPlayer";
+import YouTubeClipPlayer from "./YouTubeClipPlayer";
 import RoundTimer from "./RoundTimer";
 
 interface GameScreenProps {
@@ -16,8 +17,9 @@ interface GameScreenProps {
 
 export default function GameScreen({ room, playerId, onVote, onAudioReady }: GameScreenProps) {
   const round = room.round!;
-  const isPlaylistMode =
-    (room.settings.gameMode ?? DEFAULT_GAME_MODE) !== "jayChou";
+  const gameMode = room.settings.gameMode ?? DEFAULT_GAME_MODE;
+  const isAiMode = gameMode === "isThisAi" || round.mediaType === "youtube";
+  const isPlaylistMode = gameMode !== "jayChou" && !isAiMode;
   const inSuddenDeath =
     room.suddenDeath && room.currentRound > room.settings.rounds;
   const suddenDeathRound = getSuddenDeathRoundNumber(
@@ -52,22 +54,40 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
           </p>
         )}
         <h1 className="font-display text-lg font-bold leading-tight">
-          {isPlaylistMode ? "What song is this?" : "What Jay Chou song is this?"}
+          {isAiMode
+            ? "Is this AI or human?"
+            : isPlaylistMode
+              ? "What song is this?"
+              : "What Jay Chou song is this?"}
         </h1>
       </header>
 
       <div className="shrink-0">
-        <SnippetPlayer
-          previewUrl={round.previewUrl}
-          snippetStart={round.snippetStart}
-          snippetDuration={round.snippetDuration}
-          roundStartTime={round.roundStartTime}
-          audioPlayAt={round.audioPlayAt}
-          audioSyncing={round.audioSyncing}
-          syncReadyCount={round.syncReadyCount}
-          syncTotalPlayers={round.syncTotalPlayers}
-          onAudioReady={onAudioReady}
-        />
+        {isAiMode && round.youtubeVideoId ? (
+          <YouTubeClipPlayer
+            youtubeVideoId={round.youtubeVideoId}
+            snippetStart={round.snippetStart}
+            snippetDuration={round.snippetDuration}
+            roundStartTime={round.roundStartTime}
+            audioPlayAt={round.audioPlayAt}
+            audioSyncing={round.audioSyncing}
+            syncReadyCount={round.syncReadyCount}
+            syncTotalPlayers={round.syncTotalPlayers}
+            onAudioReady={onAudioReady}
+          />
+        ) : (
+          <SnippetPlayer
+            previewUrl={round.previewUrl}
+            snippetStart={round.snippetStart}
+            snippetDuration={round.snippetDuration}
+            roundStartTime={round.roundStartTime}
+            audioPlayAt={round.audioPlayAt}
+            audioSyncing={round.audioSyncing}
+            syncReadyCount={round.syncReadyCount}
+            syncTotalPlayers={round.syncTotalPlayers}
+            onAudioReady={onAudioReady}
+          />
+        )}
       </div>
 
       <div className="shrink-0">
@@ -78,10 +98,14 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
       </div>
 
       <div
-        className="grid grid-cols-2 gap-2 flex-1 min-h-0"
-        style={{
-          gridTemplateRows: `repeat(${Math.ceil(round.choices.length / 2)}, minmax(0, 1fr))`,
-        }}
+        className={`grid grid-cols-2 gap-2 ${isAiMode ? "shrink-0" : "flex-1 min-h-0"}`}
+        style={
+          isAiMode
+            ? undefined
+            : {
+                gridTemplateRows: `repeat(${Math.ceil(round.choices.length / 2)}, minmax(0, 1fr))`,
+              }
+        }
       >
         {round.choices.map((choice, index) => {
           const isSelected = selected === index;
@@ -90,7 +114,9 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
               key={`${choice.name}-${index}`}
               disabled={(locked && !isSelected) || round.audioSyncing}
               onClick={() => handleSelect(index)}
-              className={`h-full min-h-0 w-full text-left px-3 py-2 rounded-xl font-medium transition-colors flex flex-col justify-center overflow-hidden border-2 box-border touch-manipulation ${
+              className={`${
+                isAiMode ? "min-h-24 py-4" : "h-full min-h-0 py-2"
+              } w-full text-left px-3 rounded-xl font-medium transition-colors flex flex-col justify-center overflow-hidden border-2 box-border touch-manipulation ${
                 isSelected
                   ? "bg-vinyl-accent text-black border-vinyl-accent"
                   : locked
@@ -98,13 +124,17 @@ export default function GameScreen({ room, playerId, onVote, onAudioReady }: Gam
                     : "bg-vinyl-surface/80 border-vinyl-border hover:border-vinyl-accent/50 hover:bg-vinyl-card"
               }`}
             >
-              <span className="block text-sm font-semibold leading-tight truncate">
+              <span
+                className={`block font-semibold leading-tight truncate ${
+                  isAiMode ? "text-xl text-center w-full" : "text-sm"
+                }`}
+              >
                 {choice.name}
               </span>
               <span
                 className={`block text-[11px] leading-tight truncate ${
-                  isSelected ? "text-black/60" : "text-gray-400"
-                }`}
+                  isAiMode ? "text-center w-full" : ""
+                } ${isSelected ? "text-black/60" : "text-gray-400"}`}
               >
                 {choice.english}
               </span>

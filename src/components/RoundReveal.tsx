@@ -8,12 +8,27 @@ import {
   getSuddenDeathRoundNumber,
   isTieForFirst,
 } from "@/lib/gameLogic";
+import ClipReviewList from "./ClipReviewList";
+import SharedReviewPlayer from "./SharedReviewPlayer";
+import YouTubeClipReplay from "./YouTubeClipReplay";
+import type { PlayedClip } from "@/types/game";
 
 interface RoundRevealProps {
   room: ClientRoomView;
   playerId: string;
   isHost: boolean;
   onNext: () => void;
+  onPlayClip: (clip: {
+    youtubeVideoId: string;
+    title: string;
+    artist: string;
+    aiLabel?: "AI" | "Human";
+    artworkUrl?: string;
+    snippetStart?: number;
+    snippetDuration?: number;
+  }) => void;
+  onStopClip: () => void;
+  onOpenCoverBrowser: () => void;
 }
 
 function playSuccessChime() {
@@ -43,7 +58,15 @@ function playSuccessChime() {
   }
 }
 
-export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRevealProps) {
+export default function RoundReveal({
+  room,
+  playerId,
+  isHost,
+  onNext,
+  onPlayClip,
+  onStopClip,
+  onOpenCoverBrowser,
+}: RoundRevealProps) {
   const result = room.roundResult!;
   const regularSeasonComplete = room.currentRound >= room.settings.rounds;
   const tied = isTieForFirst(room.players);
@@ -59,6 +82,11 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
   );
   const myRanking = result.rankings.find((r) => r.playerId === playerId);
   const iGotItRight = myRanking?.correct ?? false;
+  const isAiMode = result.mediaType === "youtube" || room.settings.gameMode === "isThisAi";
+  const playedClips = room.playedClips ?? [];
+  const playback = room.reviewPlayback;
+  const currentClipActive =
+    !!result.youtubeVideoId && playback?.youtubeVideoId === result.youtubeVideoId;
 
   useEffect(() => {
     if (iGotItRight) {
@@ -69,7 +97,7 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
 
   // Play a 10s background loop of the song (continuing from where the snippet ended).
   useEffect(() => {
-    if (!result.previewUrl) return;
+    if (isAiMode || !result.previewUrl) return;
 
     const WINDOW_SEC = 10;
     const audio = new Audio(result.previewUrl);
@@ -104,7 +132,7 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
       audio.removeEventListener("ended", restart);
       audio.src = "";
     };
-  }, [result.previewUrl, result.revealStart, result.roundNumber]);
+  }, [result.previewUrl, result.revealStart, result.roundNumber, isAiMode]);
 
   return (
     <main className="min-h-dvh px-4 py-6 max-w-lg mx-auto flex flex-col gap-5">
@@ -137,7 +165,7 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
           <div className="relative w-48 h-48 sm:w-56 sm:h-56 rounded-2xl overflow-hidden shadow-2xl ring-2 ring-vinyl-border">
             <Image
               src={result.artworkUrl}
-              alt={result.correctAnswer}
+              alt={result.songTitle || result.correctAnswer}
               fill
               className="object-cover"
               unoptimized
@@ -149,9 +177,22 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
           </div>
         )}
         <div className="text-center">
-          <h1 className="font-display text-2xl font-bold">{result.correctAnswer}</h1>
-          <p className="text-vinyl-accent text-sm mt-1">{result.correctEnglish}</p>
-          <p className="text-gray-400 text-sm mt-1">was the correct answer</p>
+          {isAiMode ? (
+            <>
+              <p className="text-sm text-gray-400 mb-1">It was</p>
+              <h1 className="font-display text-3xl font-bold text-vinyl-accent">
+                {result.aiLabel || result.correctAnswer}
+              </h1>
+              <p className="font-medium text-base mt-3">{result.songTitle || result.correctEnglish}</p>
+              <p className="text-gray-400 text-sm mt-1">{result.songArtist}</p>
+            </>
+          ) : (
+            <>
+              <h1 className="font-display text-2xl font-bold">{result.correctAnswer}</h1>
+              <p className="text-vinyl-accent text-sm mt-1">{result.correctEnglish}</p>
+              <p className="text-gray-400 text-sm mt-1">was the correct answer</p>
+            </>
+          )}
         </div>
 
         {myRanking && (
@@ -166,6 +207,38 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
           </div>
         )}
       </div>
+
+      {isAiMode && (
+        <SharedReviewPlayer playback={playback} isHost={isHost} onStop={onStopClip} />
+      )}
+
+      {isAiMode && result.youtubeVideoId && (
+        <YouTubeClipReplay
+          youtubeVideoId={result.youtubeVideoId}
+          title={result.songTitle || result.correctEnglish}
+          artist={result.songArtist || ""}
+          aiLabel={result.aiLabel}
+          artworkUrl={result.artworkUrl}
+          snippetStart={Math.max(0, result.revealStart - 3)}
+          snippetDuration={30}
+          roundNumber={result.roundNumber}
+          hostControlled
+          isHost={isHost}
+          isActive={currentClipActive}
+          onHostPlay={() =>
+            onPlayClip({
+              youtubeVideoId: result.youtubeVideoId!,
+              title: result.songTitle || result.correctEnglish,
+              artist: result.songArtist || "",
+              aiLabel: result.aiLabel,
+              artworkUrl: result.artworkUrl,
+              snippetStart: Math.max(0, result.revealStart - 3),
+              snippetDuration: 30,
+            })
+          }
+          onHostStop={onStopClip}
+        />
+      )}
 
       <section className="glass rounded-2xl p-4 space-y-2">
         <h2 className="font-display font-semibold text-sm text-gray-400 uppercase tracking-wide mb-3">
@@ -232,6 +305,18 @@ export default function RoundReveal({ room, playerId, isHost, onNext }: RoundRev
             </div>
           ))}
       </section>
+
+      {isAiMode && (
+        <ClipReviewList
+          clips={playedClips}
+          playback={playback}
+          isHost={isHost}
+          onPlayClip={(clip: PlayedClip) => onPlayClip(clip)}
+          onStopClip={onStopClip}
+          onOpenCoverBrowser={onOpenCoverBrowser}
+          showSharedPlayer={false}
+        />
+      )}
 
       {isHost ? (
         <button

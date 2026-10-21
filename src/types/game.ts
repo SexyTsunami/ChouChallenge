@@ -7,15 +7,20 @@ export interface Player {
   socketId: string;
 }
 
-export type GameMode = "jayChou" | "tienFamily" | "dantonFavorites" | "custom";
+export type GameMode =
+  | "jayChou"
+  | "tienFamily"
+  | "dantonFavorites"
+  | "custom"
+  | "isThisAi";
 
 export type PlaylistImportStatus = "idle" | "loading" | "ready" | "error";
 
 export interface RoomSettings {
   rounds: number;
-  /** Number of multiple-choice options per round (4–8). */
+  /** Number of multiple-choice options per round (4–8). Ignored in Is This AI? mode. */
   choiceCount: number;
-  /** Song catalog — built-in modes or a pasted custom playlist (one at a time). */
+  /** Song catalog / special game (one at a time). */
   gameMode: GameMode;
   /** Pasted Spotify/YouTube playlist URL when gameMode is custom. */
   customPlaylistUrl?: string;
@@ -33,6 +38,10 @@ export interface TrackInfo {
   previewUrl?: string;
   /** Optional artwork for pre-resolved previews. */
   artworkUrl?: string;
+  /** YouTube video id for Is This AI? mode. */
+  youtubeVideoId?: string;
+  /** AI vs Human label for Is This AI? mode. */
+  aiLabel?: "AI" | "Human";
 }
 
 export interface SongChoice {
@@ -62,6 +71,9 @@ export interface RoundState {
   audioPlayAt: number;
   /** Server-only: which players have finished preloading audio. */
   audioReady: Record<string, boolean>;
+  /** youtube = Is This AI? embedded clip; preview = iTunes/Spotify audio. */
+  mediaType: "preview" | "youtube";
+  youtubeVideoId?: string;
 }
 
 export interface RoundResult {
@@ -75,7 +87,45 @@ export interface RoundResult {
   choices: SongChoice[];
   votes: Record<string, number | null>;
   scoresEarned: Record<string, number>;
-  rankings: { playerId: string; nickname: string; choice: number | null; correct: boolean; points: number }[];
+  rankings: {
+    playerId: string;
+    nickname: string;
+    choice: number | null;
+    correct: boolean;
+    points: number;
+  }[];
+  mediaType: "preview" | "youtube";
+  youtubeVideoId?: string;
+  /** Song title shown on Is This AI? reveal (separate from AI/Human answer). */
+  songTitle?: string;
+  songArtist?: string;
+  aiLabel?: "AI" | "Human";
+}
+
+/** Clip history for Is This AI? game-over playlist. */
+export interface PlayedClip {
+  roundNumber: number;
+  aiLabel: "AI" | "Human";
+  title: string;
+  artist: string;
+  youtubeVideoId: string;
+  youtubeUrl: string;
+  artworkUrl: string;
+  snippetStart: number;
+  snippetDuration: number;
+}
+
+/** Host-driven synced YouTube clip on reveal / cover browser. */
+export interface ReviewPlayback {
+  youtubeVideoId: string;
+  title: string;
+  artist: string;
+  aiLabel?: "AI" | "Human";
+  artworkUrl?: string;
+  snippetStart: number;
+  snippetDuration: number;
+  /** Bumps when host (re)starts a clip so clients remount the embed. */
+  nonce: number;
 }
 
 export type RoomPhase = "lobby" | "playing" | "roundEnd" | "gameOver";
@@ -95,6 +145,14 @@ export interface RoomState {
   round?: RoundState;
   roundResult?: RoundResult;
   tracks: TrackInfo[];
+  /** Clips played this game (Is This AI?), in presentation order. */
+  playedClips: PlayedClip[];
+  /** Track ids already used this game (avoid repeats). */
+  usedTrackIds: string[];
+  /** Host-selected clip currently playing for the whole room. */
+  reviewPlayback?: ReviewPlayback | null;
+  /** Host opened the full cover catalog for everyone. */
+  showCoverBrowser?: boolean;
 }
 
 export interface ClientRoomView extends Omit<RoomState, "round" | "players"> {
@@ -121,6 +179,8 @@ export const MAX_CHOICES = 8;
 export const DEFAULT_CHOICES = 8;
 export const DEFAULT_GAME_MODE: GameMode = "jayChou";
 export const ROUND_TIMER_SECONDS = 15;
+export const AI_CLIP_DURATION_SEC = 30;
+export const AI_ROUND_TIMER_SECONDS = 35;
 export const SNIPPET_LOOPS = 3;
 export const LOOP_PAUSE_MS = 400;
 /** Max wait for all players to preload audio before starting anyway */

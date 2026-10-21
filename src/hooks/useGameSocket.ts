@@ -77,7 +77,7 @@ export function useGameSocket() {
     (settings: {
       rounds?: number;
       choiceCount?: number;
-      gameMode?: "jayChou" | "tienFamily" | "dantonFavorites" | "custom";
+      gameMode?: "jayChou" | "tienFamily" | "dantonFavorites" | "custom" | "isThisAi";
       playlistUrl?: string;
       clearCustomPlaylist?: boolean;
     }) => {
@@ -106,6 +106,33 @@ export function useGameSocket() {
     socketRef.current?.emit("game:returnToLobby");
   }, []);
 
+  const playReviewClip = useCallback(
+    (clip: {
+      youtubeVideoId: string;
+      title?: string;
+      artist?: string;
+      aiLabel?: "AI" | "Human";
+      artworkUrl?: string;
+      snippetStart?: number;
+      snippetDuration?: number;
+    }) => {
+      socketRef.current?.emit("review:playClip", clip);
+    },
+    []
+  );
+
+  const stopReviewClip = useCallback(() => {
+    socketRef.current?.emit("review:stopClip");
+  }, []);
+
+  const openCoverBrowser = useCallback(() => {
+    socketRef.current?.emit("review:openCoverBrowser");
+  }, []);
+
+  const closeCoverBrowser = useCallback(() => {
+    socketRef.current?.emit("review:closeCoverBrowser");
+  }, []);
+
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit("room:leave");
   }, []);
@@ -127,6 +154,10 @@ export function useGameSocket() {
     signalAudioReady,
     nextRound,
     returnToLobby,
+    playReviewClip,
+    stopReviewClip,
+    openCoverBrowser,
+    closeCoverBrowser,
     leaveRoom,
   };
 }

@@ -1,0 +1,107 @@
+"use client";
+
+import Image from "next/image";
+import { youtubeWatchUrl } from "@/lib/isThisAiSongs";
+
+interface YouTubeClipReplayProps {
+  youtubeVideoId: string;
+  title: string;
+  artist: string;
+  aiLabel?: "AI" | "Human";
+  artworkUrl?: string;
+  snippetStart?: number;
+  snippetDuration?: number;
+  roundNumber?: number;
+  compact?: boolean;
+  /** Host-driven synced playback (reveal / cover browser). */
+  hostControlled?: boolean;
+  isHost?: boolean;
+  /** True when this clip is the room's active reviewPlayback. */
+  isActive?: boolean;
+  onHostPlay?: () => void;
+  onHostStop?: () => void;
+}
+
+/**
+ * Clip row with host play controls. Video itself plays in SharedReviewPlayer
+ * so the room never stacks multiple embeds.
+ */
+export default function YouTubeClipReplay({
+  youtubeVideoId,
+  title,
+  artist,
+  aiLabel,
+  artworkUrl,
+  roundNumber,
+  compact = false,
+  hostControlled = false,
+  isHost = false,
+  isActive = false,
+  onHostPlay,
+  onHostStop,
+}: YouTubeClipReplayProps) {
+  const watchUrl = youtubeWatchUrl(youtubeVideoId);
+  const thumb = artworkUrl || `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`;
+
+  const handlePlayToggle = () => {
+    if (!hostControlled || !isHost) return;
+    if (isActive) onHostStop?.();
+    else onHostPlay?.();
+  };
+
+  return (
+    <div
+      className={`bg-vinyl-card rounded-xl overflow-hidden ${
+        compact ? "" : "border border-vinyl-border"
+      } ${isActive ? "ring-1 ring-vinyl-accent/50" : ""}`}
+    >
+      <div className="flex gap-3 p-3">
+        <div className="relative w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-black">
+          <Image src={thumb} alt={title} fill className="object-cover" unoptimized />
+        </div>
+        <div className="min-w-0 flex-1">
+          {(roundNumber != null || aiLabel) && (
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">
+              {roundNumber != null ? `Round ${roundNumber}` : null}
+              {roundNumber != null && aiLabel ? " · " : null}
+              {aiLabel ?? null}
+            </p>
+          )}
+          <p className="font-medium text-sm truncate">{title}</p>
+          <p className="text-xs text-gray-400 truncate">{artist}</p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {hostControlled ? (
+              isHost ? (
+                <button
+                  type="button"
+                  className="text-xs px-2.5 py-1 rounded-full bg-vinyl-accent/20 text-vinyl-accent font-semibold"
+                  onClick={handlePlayToggle}
+                >
+                  {isActive ? "Stop clip" : "Play clip"}
+                </button>
+              ) : (
+                <span
+                  className={`text-xs px-2.5 py-1 rounded-full ${
+                    isActive
+                      ? "bg-vinyl-accent/20 text-vinyl-accent"
+                      : "bg-vinyl-surface text-gray-500"
+                  }`}
+                >
+                  {isActive ? "Playing…" : "Host controls playback"}
+                </span>
+              )
+            ) : null}
+            <a
+              href={watchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs px-2.5 py-1 rounded-full bg-vinyl-surface text-gray-300 hover:text-white"
+            >
+              Open on YouTube
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -50,6 +50,7 @@ export default function LobbyScreen({
   const isTienFamily = gameMode === "tienFamily";
   const isDanton = gameMode === "dantonFavorites";
   const isCustom = gameMode === "custom";
+  const isThisAi = gameMode === "isThisAi";
   const playlistStatus = room.playlistStatus ?? "idle";
   const playlistReady = isCustom && playlistStatus === "ready" && room.tracks.length > 0;
   const playlistLoading = isCustom && playlistStatus === "loading";
@@ -69,7 +70,9 @@ export default function LobbyScreen({
     !playlistLoading &&
     (!isCustom || playlistReady);
 
-  const selectBuiltInMode = (mode: "jayChou" | "tienFamily" | "dantonFavorites") => {
+  const selectBuiltInMode = (
+    mode: "jayChou" | "tienFamily" | "dantonFavorites" | "isThisAi"
+  ) => {
     setPlaylistDraft("");
     onSettings({ gameMode: mode });
   };
@@ -147,6 +150,38 @@ export default function LobbyScreen({
       </section>
 
       {isHost && (
+        <section className="glass rounded-2xl p-4 mb-6 border border-vinyl-accent/30">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="font-display font-semibold mb-1">Is This AI?</h2>
+              <p className="text-xs text-gray-500">
+                A different game — hear a ~30s YouTube clip and guess AI or Human.
+                Turns off song-guessing playlists.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isThisAi}
+              aria-label="Is This AI?"
+              onClick={() =>
+                selectBuiltInMode(isThisAi ? "jayChou" : "isThisAi")
+              }
+              className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${
+                isThisAi ? "bg-vinyl-accent" : "bg-vinyl-card border border-vinyl-border"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                  isThisAi ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+        </section>
+      )}
+
+      {isHost && !isThisAi && (
         <section className="glass rounded-2xl p-4 mb-6">
           <h2 className="font-display font-semibold mb-1">Custom playlist</h2>
           <p className="text-xs text-gray-500 mb-3">
@@ -229,19 +264,29 @@ export default function LobbyScreen({
             />
             <span className="font-mono text-xl w-8 text-center">{room.settings.rounds}</span>
           </div>
-          <label className="block text-sm text-gray-400 mb-2">Answer choices per round</label>
-          <div className="flex items-center gap-4">
-            <input
-              type="range"
-              min={MIN_CHOICES}
-              max={MAX_CHOICES}
-              value={choiceCount}
-              onChange={(e) => onSettings({ choiceCount: parseInt(e.target.value, 10) })}
-              className="flex-1 accent-vinyl-accent"
-            />
-            <span className="font-mono text-xl w-8 text-center">{choiceCount}</span>
-          </div>
+          {!isThisAi && (
+            <>
+              <label className="block text-sm text-gray-400 mb-2">Answer choices per round</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min={MIN_CHOICES}
+                  max={MAX_CHOICES}
+                  value={choiceCount}
+                  onChange={(e) => onSettings({ choiceCount: parseInt(e.target.value, 10) })}
+                  className="flex-1 accent-vinyl-accent"
+                />
+                <span className="font-mono text-xl w-8 text-center">{choiceCount}</span>
+              </div>
+            </>
+          )}
+          {isThisAi && (
+            <p className="text-xs text-gray-500 mb-1">
+              Choices are always AI vs Human for this mode.
+            </p>
+          )}
 
+          {!isThisAi && (
           <div className="mt-5 pt-5 border-t border-vinyl-border space-y-4">
             <p className="text-xs text-gray-500">
               Preset challenges — only one mode can be active
@@ -317,6 +362,7 @@ export default function LobbyScreen({
               </button>
             </div>
           </div>
+          )}
         </section>
       )}
 

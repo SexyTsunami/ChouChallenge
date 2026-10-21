@@ -6,6 +6,7 @@ import LobbyScreen from "@/components/LobbyScreen";
 import GameScreen from "@/components/GameScreen";
 import RoundReveal from "@/components/RoundReveal";
 import GameOverScreen from "@/components/GameOverScreen";
+import CoverBrowserScreen from "@/components/CoverBrowserScreen";
 
 export default function HomePage() {
   const {
@@ -23,6 +24,10 @@ export default function HomePage() {
     signalAudioReady,
     nextRound,
     returnToLobby,
+    playReviewClip,
+    stopReviewClip,
+    openCoverBrowser,
+    closeCoverBrowser,
     leaveRoom,
   } = useGameSocket();
 
@@ -40,6 +45,21 @@ export default function HomePage() {
 
   const me = room.players.find((p) => p.id === playerId);
   const isHost = me?.isHost ?? false;
+
+  if (
+    room.showCoverBrowser &&
+    (room.phase === "roundEnd" || room.phase === "gameOver")
+  ) {
+    return (
+      <CoverBrowserScreen
+        room={room}
+        isHost={isHost}
+        onPlayClip={playReviewClip}
+        onStopClip={stopReviewClip}
+        onClose={closeCoverBrowser}
+      />
+    );
+  }
 
   switch (room.phase) {
     case "lobby":
@@ -72,6 +92,9 @@ export default function HomePage() {
           playerId={playerId}
           isHost={isHost}
           onNext={nextRound}
+          onPlayClip={playReviewClip}
+          onStopClip={stopReviewClip}
+          onOpenCoverBrowser={openCoverBrowser}
         />
       );
 
@@ -82,6 +105,9 @@ export default function HomePage() {
           playerId={playerId}
           isHost={isHost}
           onReturnToLobby={returnToLobby}
+          onPlayClip={playReviewClip}
+          onStopClip={stopReviewClip}
+          onOpenCoverBrowser={openCoverBrowser}
         />
       );
 

@@ -75,6 +75,8 @@ export function calculateRoundScores(
     votes: { ...round.votes },
     scoresEarned,
     rankings,
+    mediaType: round.mediaType ?? "preview",
+    youtubeVideoId: round.youtubeVideoId,
   };
 }
 

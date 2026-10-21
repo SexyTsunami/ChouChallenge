@@ -1,5 +1,6 @@
 import type { GameMode, TrackInfo } from "@/types/game";
 import { getDantonFavoritesSongList } from "./dantonFavorites";
+import { getIsThisAiSongList } from "./isThisAiSongs";
 import { getJayChouSongList } from "./jayChouSongs";
 import { getTienFamilySongList } from "./tienFamilyFavorites";
 
@@ -9,6 +10,8 @@ export function getTracksForMode(mode: GameMode): TrackInfo[] {
       return getTienFamilySongList();
     case "dantonFavorites":
       return getDantonFavoritesSongList();
+    case "isThisAi":
+      return getIsThisAiSongList();
     case "custom":
       return [];
     default:
@@ -22,6 +25,8 @@ export function getGameModeLabel(mode: GameMode, customTitle?: string): string {
       return "Tien Family Favorites Challenge";
     case "dantonFavorites":
       return "Danton's Favorites Challenge";
+    case "isThisAi":
+      return "Is This AI?";
     case "custom":
       return customTitle?.trim()
         ? `Custom: ${customTitle.trim()}`
@@ -36,6 +41,7 @@ export function isValidGameMode(mode: unknown): mode is GameMode {
     mode === "jayChou" ||
     mode === "tienFamily" ||
     mode === "dantonFavorites" ||
-    mode === "custom"
+    mode === "custom" ||
+    mode === "isThisAi"
   );
 }
