@@ -14,8 +14,9 @@ interface YouTubeClipPlayerProps {
 }
 
 /**
- * Green "Tap to Sync" surface → after start, stay on "Tap to Play"
- * (different green) for the rest of the round. Video stays blurred.
+ * Green "Tap to Sync" → then "Tap to Play" (different green).
+ * Tap to Play is a real button that reloads the embed in a user gesture
+ * (autoplay often fails on the first load for some videos).
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -40,42 +41,56 @@ export default function YouTubeClipPlayer({
     }
   };
 
-  const startClip = useCallback(() => {
-    if (startedRef.current) return;
-    const iframe = iframeRef.current;
-    if (!iframe) return;
+  /** Load/reload the embed inside a click gesture. */
+  const loadClipInGesture = useCallback(
+    (opts: { announceStart: boolean }) => {
+      const iframe = iframeRef.current;
+      if (!iframe) return false;
 
-    iframe.style.opacity = "1";
-    iframe.style.pointerEvents = "auto";
+      iframe.style.opacity = "1";
+      iframe.style.pointerEvents = "auto";
 
-    const ok = startYoutubeInGesture(iframe, youtubeVideoId, {
-      startSec: snippetStart,
-      durationSec: snippetDuration,
-      mute: false,
-      autoplay: true,
-      controls: true,
-    });
-    if (!ok) return;
+      // Bust cache / force a fresh player load so a second tap can recover
+      // when the first autoplay attempt stalled (common on mobile).
+      const ok = startYoutubeInGesture(iframe, youtubeVideoId, {
+        startSec: snippetStart,
+        durationSec: snippetDuration,
+        mute: false,
+        autoplay: true,
+        controls: true,
+      });
+      if (!ok) return false;
 
-    startedRef.current = true;
-    setHasStarted(true);
-    onClipStarted?.();
+      const firstStart = !startedRef.current;
+      startedRef.current = true;
+      setHasStarted(true);
 
-    // Stop audio when the snippet window ends, but keep Tap to Play UI up
-    // so the round timer ending doesn't flash Sync again.
-    clearStopTimer();
-    stopTimerRef.current = setTimeout(() => {
-      stopYoutubeIframe(iframeRef.current);
-    }, snippetDuration * 1000 + 800);
-  }, [youtubeVideoId, snippetStart, snippetDuration, onClipStarted]);
+      if (opts.announceStart && firstStart) {
+        onClipStarted?.();
+      }
 
-  const handleSyncAndPlay = useCallback(() => {
+      clearStopTimer();
+      stopTimerRef.current = setTimeout(() => {
+        stopYoutubeIframe(iframeRef.current);
+      }, snippetDuration * 1000 + 800);
+
+      return true;
+    },
+    [youtubeVideoId, snippetStart, snippetDuration, onClipStarted]
+  );
+
+  const handleSync = useCallback(() => {
     if (!readySignaledRef.current) {
       readySignaledRef.current = true;
       onAudioReady?.();
     }
-    startClip();
-  }, [onAudioReady, startClip]);
+    loadClipInGesture({ announceStart: true });
+  }, [onAudioReady, loadClipInGesture]);
+
+  /** Second-chance play: always reload embed in this gesture; do not re-fire timer. */
+  const handleTapToPlay = useCallback(() => {
+    loadClipInGesture({ announceStart: false });
+  }, [loadClipInGesture]);
 
   useEffect(() => {
     readySignaledRef.current = false;
@@ -103,7 +118,7 @@ export default function YouTubeClipPlayer({
           style={{
             opacity: hasStarted ? 1 : 0,
             filter: hasStarted ? "blur(40px) brightness(0.35) saturate(0.5)" : undefined,
-            pointerEvents: hasStarted ? "auto" : "none",
+            pointerEvents: "none",
           }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
@@ -112,7 +127,7 @@ export default function YouTubeClipPlayer({
         {!hasStarted ? (
           <button
             type="button"
-            onClick={handleSyncAndPlay}
+            onClick={handleSync}
             className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-vinyl-accent text-black touch-manipulation active:brightness-95"
             aria-label="Tap to sync"
           >
@@ -122,12 +137,17 @@ export default function YouTubeClipPlayer({
             </span>
           </button>
         ) : (
-          <p
-            className="absolute inset-0 z-10 flex items-center justify-center text-center text-lg font-bold pointer-events-none drop-shadow"
-            style={{ color: "#6ee7b7" }}
+          <button
+            type="button"
+            onClick={handleTapToPlay}
+            className="absolute inset-0 z-10 flex items-center justify-center touch-manipulation active:brightness-95"
+            aria-label="Tap to play"
+            style={{ background: "rgba(16, 185, 129, 0.35)" }}
           >
-            Tap to Play
-          </p>
+            <span className="text-lg font-bold drop-shadow" style={{ color: "#6ee7b7" }}>
+              Tap to Play
+            </span>
+          </button>
         )}
       </div>
     </div>
