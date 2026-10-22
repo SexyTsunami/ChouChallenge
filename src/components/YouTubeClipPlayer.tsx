@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { youtubeEmbedUrl, stopYoutubeIframe } from "@/lib/youtubeEmbed";
+import { startYoutubeInGesture, stopYoutubeIframe } from "@/lib/youtubeEmbed";
 
 interface YouTubeClipPlayerProps {
   youtubeVideoId: string;
@@ -17,9 +17,8 @@ interface YouTubeClipPlayerProps {
 }
 
 /**
- * Mobile-first: Sync → Play.
- * Play creates the iframe inside the tap (required for iOS sound) and keeps an
- * overlay on top so a second tap never hits YouTube's own play button.
+ * Sync → Play. Loads the YouTube embed on Play (with controls).
+ * On phones, autoplay may stay paused — tap the video play button once if silent.
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -33,7 +32,6 @@ export default function YouTubeClipPlayer({
   onClipStarted,
 }: YouTubeClipPlayerProps) {
   const readySignaledRef = useRef(false);
-  const frameHostRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasSynced, setHasSynced] = useState(false);
@@ -44,17 +42,6 @@ export default function YouTubeClipPlayer({
     if (stopTimerRef.current) {
       clearTimeout(stopTimerRef.current);
       stopTimerRef.current = null;
-    }
-  };
-
-  const clearFrame = () => {
-    if (iframeRef.current) {
-      stopYoutubeIframe(iframeRef.current);
-      iframeRef.current.remove();
-      iframeRef.current = null;
-    }
-    if (frameHostRef.current) {
-      frameHostRef.current.innerHTML = "";
     }
   };
 
@@ -71,49 +58,33 @@ export default function YouTubeClipPlayer({
     setClipStarted(false);
     setIsPlaying(false);
     clearStopTimer();
-    clearFrame();
+    stopYoutubeIframe(iframeRef.current);
   }, [youtubeVideoId]);
 
   useEffect(() => {
     return () => {
       clearStopTimer();
-      clearFrame();
+      stopYoutubeIframe(iframeRef.current);
     };
   }, []);
 
   const handlePlayClip = useCallback(() => {
     if (clipStarted) return;
-    const host = frameHostRef.current;
-    if (!host) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
 
-    // Build the iframe inside this tap — most reliable path for mobile sound.
-    clearFrame();
-    const iframe = document.createElement("iframe");
-    iframe.title = "YouTube audio clip";
-    iframe.allow =
-      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
-    iframe.referrerPolicy = "strict-origin-when-cross-origin";
-    iframe.setAttribute(
-      "style",
-      [
-        "position:absolute",
-        "inset:0",
-        "width:100%",
-        "height:100%",
-        "border:0",
-        "pointer-events:none",
-        "filter:blur(30px) brightness(0.4)",
-      ].join(";")
-    );
-    iframe.src = youtubeEmbedUrl(youtubeVideoId, {
+    // Make the embed visible before setting src (helps mobile playback).
+    iframe.style.opacity = "1";
+    iframe.style.pointerEvents = "auto";
+
+    const ok = startYoutubeInGesture(iframe, youtubeVideoId, {
       startSec: snippetStart,
       durationSec: snippetDuration,
       mute: false,
       autoplay: true,
-      controls: false,
+      controls: true,
     });
-    host.appendChild(iframe);
-    iframeRef.current = iframe;
+    if (!ok) return;
 
     setClipStarted(true);
     setIsPlaying(true);
@@ -122,7 +93,7 @@ export default function YouTubeClipPlayer({
     clearStopTimer();
     stopTimerRef.current = setTimeout(() => {
       setIsPlaying(false);
-      clearFrame();
+      stopYoutubeIframe(iframeRef.current);
     }, snippetDuration * 1000 + 800);
   }, [
     clipStarted,
@@ -138,29 +109,36 @@ export default function YouTubeClipPlayer({
 
   return (
     <div className="flex flex-col items-center gap-3 w-full">
-      {/* Compact media well — only grows when playing */}
-      <div
-        className={`relative w-full max-w-xs overflow-hidden rounded-2xl bg-black ring-1 ring-vinyl-border ${
-          isPlaying ? "aspect-video" : "h-14"
-        }`}
-      >
-        <div ref={frameHostRef} className="absolute inset-0" />
-        {/* Always cover the iframe so taps never hit YouTube UI */}
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-vinyl-surface/90 pointer-events-none">
-          <p
-            className={`font-medium ${
-              isPlaying ? "text-vinyl-accent text-sm" : "text-gray-400 text-xs"
-            }`}
-          >
-            {isPlaying
-              ? "Now playing — listen & guess"
-              : showWaiting
-                ? "Synced — waiting for Play…"
-                : showPlay
-                  ? "Tap Play clip below"
-                  : "Audio only"}
-          </p>
-        </div>
+      <div className="relative w-full max-w-xs aspect-video rounded-2xl overflow-hidden bg-black ring-1 ring-vinyl-border">
+        <iframe
+          ref={iframeRef}
+          title="YouTube audio clip"
+          tabIndex={-1}
+          className="absolute inset-0 w-full h-full border-0"
+          style={{
+            opacity: isPlaying ? 1 : 0,
+            // Allow tapping YouTube's play control if autoplay stays paused.
+            pointerEvents: isPlaying ? "auto" : "none",
+          }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
+
+        {!isPlaying && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-vinyl-surface pointer-events-none">
+            <p className="text-sm font-medium text-gray-300">
+              {showSync
+                ? "Sync to start"
+                : showWaiting
+                  ? "Synced — waiting…"
+                  : showPlay
+                    ? "Ready — hit Play clip"
+                    : clipStarted
+                      ? "Clip finished"
+                      : "Audio"}
+            </p>
+          </div>
+        )}
       </div>
 
       {showSync && (
@@ -189,13 +167,19 @@ export default function YouTubeClipPlayer({
         </button>
       )}
 
+      {isPlaying && (
+        <p className="text-xs text-gray-400 text-center max-w-xs">
+          If there’s no sound, tap the ▶ on the video once.
+        </p>
+      )}
+
       <p className="text-xs text-gray-500 text-center max-w-xs">
         {showSync
           ? "Sync first — the timer starts when you hit Play."
           : showWaiting
             ? "Almost there…"
             : showPlay
-              ? "Play starts the clip and the round timer."
+              ? "Play loads the clip (timer starts)."
               : "Guess AI or Human."}
       </p>
     </div>
