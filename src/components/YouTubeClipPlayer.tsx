@@ -112,9 +112,9 @@ export default function YouTubeClipPlayer({
             type="button"
             onClick={handleSyncAndPlay}
             className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-vinyl-accent text-black touch-manipulation active:brightness-95"
-            aria-label="Sync and play clip"
+            aria-label="Tap to sync"
           >
-            <span className="text-lg font-bold">▶ Sync & play</span>
+            <span className="text-lg font-bold">Tap to Sync</span>
             <span className="text-xs font-semibold opacity-80">
               ({syncReadyCount}/{syncTotalPlayers})
             </span>
@@ -122,8 +122,8 @@ export default function YouTubeClipPlayer({
         ) : (
           <>
             <div className="absolute inset-0 z-[1] bg-black/25 pointer-events-none" />
-            <p className="absolute bottom-2 left-0 right-0 z-10 text-center text-xs text-white/90 pointer-events-none drop-shadow">
-              Now playing — tap ▶ on video if silent
+            <p className="absolute inset-0 z-10 flex items-center justify-center text-center text-lg font-bold text-white pointer-events-none drop-shadow">
+              Tap to Play
             </p>
           </>
         )}
