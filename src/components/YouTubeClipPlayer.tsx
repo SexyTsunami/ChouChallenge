@@ -14,8 +14,8 @@ interface YouTubeClipPlayerProps {
 }
 
 /**
- * One green Sync & play surface (the media rectangle is the button).
- * Video stays heavily blurred while playing.
+ * Green "Tap to Sync" surface → after start, stay on "Tap to Play"
+ * (different green) for the rest of the round. Video stays blurred.
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -30,7 +30,8 @@ export default function YouTubeClipPlayer({
   const startedRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  /** Once true for this clip, never return to Tap to Sync. */
+  const [hasStarted, setHasStarted] = useState(false);
 
   const clearStopTimer = () => {
     if (stopTimerRef.current) {
@@ -57,12 +58,13 @@ export default function YouTubeClipPlayer({
     if (!ok) return;
 
     startedRef.current = true;
-    setIsPlaying(true);
+    setHasStarted(true);
     onClipStarted?.();
 
+    // Stop audio when the snippet window ends, but keep Tap to Play UI up
+    // so the round timer ending doesn't flash Sync again.
     clearStopTimer();
     stopTimerRef.current = setTimeout(() => {
-      setIsPlaying(false);
       stopYoutubeIframe(iframeRef.current);
     }, snippetDuration * 1000 + 800);
   }, [youtubeVideoId, snippetStart, snippetDuration, onClipStarted]);
@@ -78,7 +80,7 @@ export default function YouTubeClipPlayer({
   useEffect(() => {
     readySignaledRef.current = false;
     startedRef.current = false;
-    setIsPlaying(false);
+    setHasStarted(false);
     clearStopTimer();
     stopYoutubeIframe(iframeRef.current);
   }, [youtubeVideoId]);
@@ -99,15 +101,15 @@ export default function YouTubeClipPlayer({
           tabIndex={-1}
           className="absolute inset-0 w-full h-full border-0"
           style={{
-            opacity: isPlaying ? 1 : 0,
-            filter: isPlaying ? "blur(40px) brightness(0.35) saturate(0.5)" : undefined,
-            pointerEvents: isPlaying ? "auto" : "none",
+            opacity: hasStarted ? 1 : 0,
+            filter: hasStarted ? "blur(40px) brightness(0.35) saturate(0.5)" : undefined,
+            pointerEvents: hasStarted ? "auto" : "none",
           }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
         />
 
-        {!isPlaying ? (
+        {!hasStarted ? (
           <button
             type="button"
             onClick={handleSyncAndPlay}
@@ -120,12 +122,12 @@ export default function YouTubeClipPlayer({
             </span>
           </button>
         ) : (
-          <>
-            <div className="absolute inset-0 z-[1] bg-black/25 pointer-events-none" />
-            <p className="absolute inset-0 z-10 flex items-center justify-center text-center text-lg font-bold text-white pointer-events-none drop-shadow">
-              Tap to Play
-            </p>
-          </>
+          <p
+            className="absolute inset-0 z-10 flex items-center justify-center text-center text-lg font-bold pointer-events-none drop-shadow"
+            style={{ color: "#6ee7b7" }}
+          >
+            Tap to Play
+          </p>
         )}
       </div>
     </div>
