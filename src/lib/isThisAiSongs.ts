@@ -34,7 +34,7 @@ function clip(
 
 /** Short display titles for the UI (channel/author kept as english). */
 export const IS_THIS_AI_CLIPS: AiClipTrack[] = [
-  // AI (66)
+  // AI (68)
   clip("KzfnIcZrDbs", "AI", "Jay Chou 周杰倫 – 青花瓷 (Blue and White Porcelain)", "Eternal Melody AI", 18),
   clip("vWXnT45RuFo", "AI", "Andy Lau 劉德華 – 謝謝你的愛 (Thank You for Your Love)", "Eternal Melody AI", 18),
   clip("jlrs-q3tRA8", "AI", "擱淺", "Haohao Music", 18),
@@ -101,6 +101,8 @@ export const IS_THIS_AI_CLIPS: AiClipTrack[] = [
   clip("m1Gy_0QXqn0", "AI", "《雙星情歌》MV", "CCG", 18),
   clip("xioIhSoE7rs", "AI", "情已逝~張學友 [Cover by Aiyanna.V]", "AiyannaV", 18),
   clip("ulP7z82DGec", "AI", "遙遠的她~張學友 [Cover by Aiyanna.V]", "AiyannaV", 18),
+  clip("kB6aQwtNOVA", "AI", "《每天愛你多一些》張學友", "CCG", 18),
+  clip("RYTYEptDI-c", "AI", "《一起走過的日子》劉德華", "CCG", 18),
 
   // Human (36)
   clip("Hdaw7VzYBEA", "Human", "街头！达文西和十四姐合唱周杰伦的《珊瑚海》“海鸟跟鱼相爱，只是一场意外”", "长沙街唱", 18),

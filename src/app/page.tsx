@@ -22,6 +22,7 @@ export default function HomePage() {
     startGame,
     submitVote,
     signalAudioReady,
+    signalClipStarted,
     nextRound,
     signalTimerExpired,
     returnToLobby,
@@ -83,6 +84,7 @@ export default function HomePage() {
           playerId={playerId}
           onVote={submitVote}
           onAudioReady={signalAudioReady}
+          onClipStarted={signalClipStarted}
           onTimerExpired={signalTimerExpired}
         />
       );

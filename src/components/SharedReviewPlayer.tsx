@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import type { ReviewPlayback } from "@/types/game";
 import { youtubeWatchUrl } from "@/lib/isThisAiSongs";
-import { startYoutubeInGesture, stopYoutubeIframe } from "@/lib/youtubeEmbed";
+import { youtubeEmbedUrl, stopYoutubeIframe } from "@/lib/youtubeEmbed";
 
 interface SharedReviewPlayerProps {
   playback: ReviewPlayback | null | undefined;
@@ -13,47 +13,63 @@ interface SharedReviewPlayerProps {
   showYouTubeLink?: boolean;
 }
 
-/**
- * Host queues a clip → every device taps ▶ Play for sound.
- * No hidden iframe (iOS blocks audio). Controls stay on as unmute fallback.
- */
+/** Host queues a clip → tap ▶ Play (iframe created in the tap for mobile sound). */
 export default function SharedReviewPlayer({
   playback,
   isHost,
   onStop,
   showYouTubeLink = false,
 }: SharedReviewPlayerProps) {
+  const frameHostRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    setPlaying(false);
-    stopYoutubeIframe(iframeRef.current);
-  }, [playback?.youtubeVideoId, playback?.nonce]);
+  const clearFrame = () => {
+    if (iframeRef.current) {
+      stopYoutubeIframe(iframeRef.current);
+      iframeRef.current.remove();
+      iframeRef.current = null;
+    }
+    if (frameHostRef.current) frameHostRef.current.innerHTML = "";
+  };
 
   useEffect(() => {
-    return () => stopYoutubeIframe(iframeRef.current);
-  }, []);
+    setPlaying(false);
+    clearFrame();
+  }, [playback?.youtubeVideoId, playback?.nonce]);
+
+  useEffect(() => () => clearFrame(), []);
 
   const handlePlay = useCallback(() => {
     if (!playback || playing) return;
-    const iframe = iframeRef.current;
-    if (!iframe) return;
+    const host = frameHostRef.current;
+    if (!host) return;
 
-    iframe.style.opacity = "1";
-    const ok = startYoutubeInGesture(iframe, playback.youtubeVideoId, {
+    clearFrame();
+    const iframe = document.createElement("iframe");
+    iframe.title = playback.title;
+    iframe.allow =
+      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+    iframe.allowFullscreen = true;
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
+    iframe.setAttribute(
+      "style",
+      "position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none"
+    );
+    iframe.src = youtubeEmbedUrl(playback.youtubeVideoId, {
       startSec: playback.snippetStart,
       durationSec: playback.snippetDuration,
       mute: false,
       autoplay: true,
-      controls: true,
+      controls: false,
     });
-    if (!ok) return;
+    host.appendChild(iframe);
+    iframeRef.current = iframe;
     setPlaying(true);
   }, [playback, playing]);
 
   const handleStop = useCallback(() => {
-    stopYoutubeIframe(iframeRef.current);
+    clearFrame();
     setPlaying(false);
     onStop?.();
   }, [onStop]);
@@ -112,15 +128,7 @@ export default function SharedReviewPlayer({
       </div>
 
       <div className="relative w-full aspect-video bg-black">
-        <iframe
-          ref={iframeRef}
-          title={playback.title}
-          className="absolute inset-0 w-full h-full border-0"
-          style={{ opacity: playing ? 1 : 0 }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          referrerPolicy="strict-origin-when-cross-origin"
-        />
+        <div ref={frameHostRef} className="absolute inset-0" />
         {!playing && (
           <button
             type="button"
@@ -130,10 +138,11 @@ export default function SharedReviewPlayer({
             <span className="px-5 py-3 rounded-full bg-vinyl-accent text-black font-bold text-base">
               ▶ Play clip
             </span>
-            <span className="text-xs text-white/80 px-4 text-center">
-              Tap for sound — required on phones
-            </span>
+            <span className="text-xs text-white/80">Tap once for sound</span>
           </button>
+        )}
+        {playing && (
+          <div className="absolute inset-0 z-10 pointer-events-none bg-transparent" />
         )}
       </div>
     </section>

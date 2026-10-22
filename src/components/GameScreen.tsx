@@ -13,6 +13,7 @@ interface GameScreenProps {
   playerId: string;
   onVote: (choiceIndex: number) => void;
   onAudioReady: () => void;
+  onClipStarted?: () => void;
   onTimerExpired?: () => void;
 }
 
@@ -21,6 +22,7 @@ export default function GameScreen({
   playerId,
   onVote,
   onAudioReady,
+  onClipStarted,
   onTimerExpired,
 }: GameScreenProps) {
   const round = room.round!;
@@ -81,6 +83,7 @@ export default function GameScreen({
             syncReadyCount={round.syncReadyCount}
             syncTotalPlayers={round.syncTotalPlayers}
             onAudioReady={onAudioReady}
+            onClipStarted={onClipStarted}
           />
         ) : (
           <SnippetPlayer

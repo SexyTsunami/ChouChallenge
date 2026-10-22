@@ -139,16 +139,34 @@ function beginRoundAudio(io: Server, room: RoomState) {
 
   clearAudioSyncTimer(room.code);
   const now = Date.now();
-  const playAt = now + AUDIO_PLAY_DELAY_MS;
-  room.round.audioPlayAt = playAt;
-  // Timer counts from when audio should start so UI hits 0 when the round ends.
-  room.round.roundStartTime = playAt;
+  // Unlock Play for everyone — do NOT start the guess timer yet.
+  // Timer starts on first game:clipStarted (when someone actually hits Play).
+  room.round.audioPlayAt = now + AUDIO_PLAY_DELAY_MS;
+  room.round.roundStartTime = 0;
+
+  // Fallback: if nobody hits Play, still start the timer so the round can't stall.
+  clearRoundTimer(room.code);
+  const fallback = setTimeout(() => {
+    const r = getRoom(room.code);
+    if (r) beginRoundTimer(io, r);
+  }, AUDIO_PLAY_DELAY_MS + 20000);
+  roundTimers.set(room.code, fallback);
+
+  broadcastRoom(io, room);
+}
+
+/** Start the guess countdown once a player has actually started the clip. */
+function beginRoundTimer(io: Server, room: RoomState) {
+  if (!room.round || room.phase !== "playing") return;
+  if (room.round.roundStartTime > 0) return;
 
   clearRoundTimer(room.code);
+  const now = Date.now();
+  room.round.roundStartTime = now;
   const timerSeconds = room.round.timerSeconds || ROUND_TIMER_SECONDS;
   const timer = setTimeout(() => {
     endRound(io, room.code);
-  }, AUDIO_PLAY_DELAY_MS + timerSeconds * 1000);
+  }, timerSeconds * 1000);
   roundTimers.set(room.code, timer);
 
   broadcastRoom(io, room);
@@ -649,6 +667,16 @@ export function initSocketServer(httpServer: HttpServer): Server {
       room.round.audioReady[currentPlayerId] = true;
       broadcastRoom(io, room);
       maybeStartRoundAudio(io, roomCode);
+    });
+
+    socket.on("game:clipStarted", () => {
+      if (!currentPlayerId) return;
+      const roomCode = playerToRoom.get(currentPlayerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      if (!room?.round || room.phase !== "playing") return;
+      if (room.round.audioPlayAt <= 0) return;
+      beginRoundTimer(io, room);
     });
 
     socket.on("game:vote", ({ choiceIndex }: { choiceIndex: number }) => {
