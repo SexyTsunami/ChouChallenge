@@ -8,26 +8,12 @@ import {
   getSuddenDeathRoundNumber,
   isTieForFirst,
 } from "@/lib/gameLogic";
-import ClipReviewList from "./ClipReviewList";
-import SharedReviewPlayer from "./SharedReviewPlayer";
-import YouTubeClipReplay from "./YouTubeClipReplay";
-import type { PlayedClip } from "@/types/game";
 
 interface RoundRevealProps {
   room: ClientRoomView;
   playerId: string;
   isHost: boolean;
   onNext: () => void;
-  onPlayClip: (clip: {
-    youtubeVideoId: string;
-    title: string;
-    artist: string;
-    aiLabel?: "AI" | "Human";
-    artworkUrl?: string;
-    snippetStart?: number;
-    snippetDuration?: number;
-  }) => void;
-  onStopClip: () => void;
 }
 
 function playSuccessChime() {
@@ -62,8 +48,6 @@ export default function RoundReveal({
   playerId,
   isHost,
   onNext,
-  onPlayClip,
-  onStopClip,
 }: RoundRevealProps) {
   const result = room.roundResult!;
   const regularSeasonComplete = room.currentRound >= room.settings.rounds;
@@ -81,10 +65,6 @@ export default function RoundReveal({
   const myRanking = result.rankings.find((r) => r.playerId === playerId);
   const iGotItRight = myRanking?.correct ?? false;
   const isAiMode = result.mediaType === "youtube" || room.settings.gameMode === "isThisAi";
-  const playedClips = room.playedClips ?? [];
-  const playback = room.reviewPlayback;
-  const currentClipActive =
-    !!result.youtubeVideoId && playback?.youtubeVideoId === result.youtubeVideoId;
 
   useEffect(() => {
     if (iGotItRight) {
@@ -206,44 +186,6 @@ export default function RoundReveal({
         )}
       </div>
 
-      {isAiMode && (
-        <SharedReviewPlayer
-          playback={playback}
-          isHost={isHost}
-          onStop={onStopClip}
-          showYouTubeLink={false}
-        />
-      )}
-
-      {isAiMode && result.youtubeVideoId && (
-        <YouTubeClipReplay
-          youtubeVideoId={result.youtubeVideoId}
-          title={result.songTitle || result.correctEnglish}
-          artist={result.songArtist || ""}
-          aiLabel={result.aiLabel}
-          artworkUrl={result.artworkUrl}
-          snippetStart={Math.max(0, result.revealStart - 3)}
-          snippetDuration={30}
-          roundNumber={result.roundNumber}
-          hostControlled
-          isHost={isHost}
-          isActive={currentClipActive}
-          showYouTubeLink={false}
-          onHostPlay={() =>
-            onPlayClip({
-              youtubeVideoId: result.youtubeVideoId!,
-              title: result.songTitle || result.correctEnglish,
-              artist: result.songArtist || "",
-              aiLabel: result.aiLabel,
-              artworkUrl: result.artworkUrl,
-              snippetStart: Math.max(0, result.revealStart - 3),
-              snippetDuration: 30,
-            })
-          }
-          onHostStop={onStopClip}
-        />
-      )}
-
       <section className="glass rounded-2xl p-4 space-y-2">
         <h2 className="font-display font-semibold text-sm text-gray-400 uppercase tracking-wide mb-3">
           Everyone&apos;s picks
@@ -309,17 +251,6 @@ export default function RoundReveal({
             </div>
           ))}
       </section>
-
-      {isAiMode && (
-        <ClipReviewList
-          clips={playedClips}
-          playback={playback}
-          isHost={isHost}
-          onPlayClip={(clip: PlayedClip) => onPlayClip(clip)}
-          onStopClip={onStopClip}
-          showSharedPlayer={false}
-        />
-      )}
 
       {isHost ? (
         <button

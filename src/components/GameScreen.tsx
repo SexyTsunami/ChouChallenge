@@ -77,9 +77,6 @@ export default function GameScreen({
             youtubeVideoId={round.youtubeVideoId}
             snippetStart={round.snippetStart}
             snippetDuration={round.snippetDuration}
-            roundStartTime={round.roundStartTime}
-            audioPlayAt={round.audioPlayAt}
-            audioSyncing={round.audioSyncing}
             syncReadyCount={round.syncReadyCount}
             syncTotalPlayers={round.syncTotalPlayers}
             onAudioReady={onAudioReady}

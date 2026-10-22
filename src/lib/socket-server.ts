@@ -139,18 +139,10 @@ function beginRoundAudio(io: Server, room: RoomState) {
 
   clearAudioSyncTimer(room.code);
   const now = Date.now();
-  // Unlock Play for everyone — do NOT start the guess timer yet.
-  // Timer starts on first game:clipStarted (when someone actually hits Play).
+  // Mark the room as past sync — do NOT start the guess timer.
+  // Timer only starts on game:clipStarted (someone tapped Sync & play).
   room.round.audioPlayAt = now + AUDIO_PLAY_DELAY_MS;
   room.round.roundStartTime = 0;
-
-  // Fallback: if nobody hits Play, still start the timer so the round can't stall.
-  clearRoundTimer(room.code);
-  const fallback = setTimeout(() => {
-    const r = getRoom(room.code);
-    if (r) beginRoundTimer(io, r);
-  }, AUDIO_PLAY_DELAY_MS + 20000);
-  roundTimers.set(room.code, fallback);
 
   broadcastRoom(io, room);
 }
@@ -376,11 +368,14 @@ async function startNextRound(io: Server, code: string) {
 
   clearRoundTimer(code);
   clearAudioSyncTimer(code);
-  const syncTimer = setTimeout(() => {
-    const r = getRoom(code);
-    if (r) beginRoundAudio(io, r);
-  }, AUDIO_SYNC_MAX_WAIT_MS);
-  audioSyncTimers.set(code, syncTimer);
+  // YouTube / Sync & play rounds wait indefinitely for a tap — no auto-unlock.
+  if (room.round.mediaType !== "youtube") {
+    const syncTimer = setTimeout(() => {
+      const r = getRoom(code);
+      if (r) beginRoundAudio(io, r);
+    }, AUDIO_SYNC_MAX_WAIT_MS);
+    audioSyncTimers.set(code, syncTimer);
+  }
 }
 
 function removePlayer(io: Server, playerId: string) {
@@ -675,7 +670,11 @@ export function initSocketServer(httpServer: HttpServer): Server {
       if (!roomCode) return;
       const room = getRoom(roomCode);
       if (!room?.round || room.phase !== "playing") return;
-      if (room.round.audioPlayAt <= 0) return;
+      // Sync & play may emit clipStarted in the same gesture as audioReady —
+      // ensure audio is unlocked before starting the timer.
+      if (room.round.audioPlayAt <= 0) {
+        beginRoundAudio(io, room);
+      }
       beginRoundTimer(io, room);
     });
 

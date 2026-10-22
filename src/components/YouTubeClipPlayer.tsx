@@ -7,9 +7,6 @@ interface YouTubeClipPlayerProps {
   youtubeVideoId: string;
   snippetStart: number;
   snippetDuration: number;
-  roundStartTime: number;
-  audioPlayAt: number;
-  audioSyncing?: boolean;
   syncReadyCount?: number;
   syncTotalPlayers?: number;
   onAudioReady?: () => void;
@@ -17,8 +14,8 @@ interface YouTubeClipPlayerProps {
 }
 
 /**
- * One button: sync + start the clip in the same tap.
- * Video stays heavily blurred; YouTube controls remain tappable if sound needs a nudge.
+ * One green Sync & play surface (the media rectangle is the button).
+ * Video stays heavily blurred while playing.
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -33,7 +30,6 @@ export default function YouTubeClipPlayer({
   const startedRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [hasSynced, setHasSynced] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const clearStopTimer = () => {
@@ -74,17 +70,14 @@ export default function YouTubeClipPlayer({
   const handleSyncAndPlay = useCallback(() => {
     if (!readySignaledRef.current) {
       readySignaledRef.current = true;
-      setHasSynced(true);
       onAudioReady?.();
     }
-    // Same tap: start audio immediately (needed for mobile sound unlock).
     startClip();
   }, [onAudioReady, startClip]);
 
   useEffect(() => {
     readySignaledRef.current = false;
     startedRef.current = false;
-    setHasSynced(false);
     setIsPlaying(false);
     clearStopTimer();
     stopYoutubeIframe(iframeRef.current);
@@ -98,8 +91,8 @@ export default function YouTubeClipPlayer({
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-3 w-full">
-      <div className="relative w-full max-w-xs aspect-video rounded-2xl overflow-hidden bg-black ring-1 ring-vinyl-border">
+    <div className="flex flex-col items-center gap-2 w-full">
+      <div className="relative w-full max-w-xs aspect-video rounded-2xl overflow-hidden ring-1 ring-vinyl-border">
         <iframe
           ref={iframeRef}
           title="YouTube audio clip"
@@ -114,37 +107,27 @@ export default function YouTubeClipPlayer({
           referrerPolicy="strict-origin-when-cross-origin"
         />
 
-        {!isPlaying && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-vinyl-surface pointer-events-none">
-            <p className="text-sm font-medium text-gray-400">
-              {hasSynced ? "Starting…" : "Audio only"}
+        {!isPlaying ? (
+          <button
+            type="button"
+            onClick={handleSyncAndPlay}
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-vinyl-accent text-black touch-manipulation active:brightness-95"
+            aria-label="Sync and play clip"
+          >
+            <span className="text-lg font-bold">▶ Sync & play</span>
+            <span className="text-xs font-semibold opacity-80">
+              ({syncReadyCount}/{syncTotalPlayers})
+            </span>
+          </button>
+        ) : (
+          <>
+            <div className="absolute inset-0 z-[1] bg-black/25 pointer-events-none" />
+            <p className="absolute bottom-2 left-0 right-0 z-10 text-center text-xs text-white/90 pointer-events-none drop-shadow">
+              Now playing — tap ▶ on video if silent
             </p>
-          </div>
-        )}
-
-        {/* Soft scrim so blurred video still hides AI/Human cues; taps pass through to YT controls */}
-        {isPlaying && (
-          <div className="absolute inset-0 z-[1] bg-black/25 pointer-events-none" />
+          </>
         )}
       </div>
-
-      {!isPlaying ? (
-        <button
-          type="button"
-          onClick={handleSyncAndPlay}
-          className="w-full max-w-xs py-4 rounded-full font-bold text-base btn-primary touch-manipulation shadow-lg"
-        >
-          ▶ Sync & play ({syncReadyCount}/{syncTotalPlayers})
-        </button>
-      ) : (
-        <p className="text-sm text-vinyl-accent font-medium">Now playing — listen & guess</p>
-      )}
-
-      <p className="text-xs text-gray-500 text-center max-w-xs">
-        {isPlaying
-          ? "No sound? Tap ▶ on the blurred video once."
-          : "One tap syncs the room and starts the clip."}
-      </p>
     </div>
   );
 }

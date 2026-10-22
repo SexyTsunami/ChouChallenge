@@ -96,8 +96,6 @@ export default function HomePage() {
           playerId={playerId}
           isHost={isHost}
           onNext={nextRound}
-          onPlayClip={playReviewClip}
-          onStopClip={stopReviewClip}
         />
       );
 
