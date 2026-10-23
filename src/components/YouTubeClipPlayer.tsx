@@ -14,9 +14,8 @@ interface YouTubeClipPlayerProps {
 }
 
 /**
- * Green "Tap to Sync" → then "Tap to Play" (different green).
- * Tap to Play is a real button that reloads the embed in a user gesture
- * (autoplay often fails on the first load for some videos).
+ * Green "Tap to Sync" surface → after start, stay on "Tap to Play"
+ * (different green) for the rest of the round. Video stays blurred.
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -41,56 +40,42 @@ export default function YouTubeClipPlayer({
     }
   };
 
-  /** Load/reload the embed inside a click gesture. */
-  const loadClipInGesture = useCallback(
-    (opts: { announceStart: boolean }) => {
-      const iframe = iframeRef.current;
-      if (!iframe) return false;
+  const startClip = useCallback(() => {
+    if (startedRef.current) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
 
-      iframe.style.opacity = "1";
-      iframe.style.pointerEvents = "auto";
+    iframe.style.opacity = "1";
+    iframe.style.pointerEvents = "auto";
 
-      // Bust cache / force a fresh player load so a second tap can recover
-      // when the first autoplay attempt stalled (common on mobile).
-      const ok = startYoutubeInGesture(iframe, youtubeVideoId, {
-        startSec: snippetStart,
-        durationSec: snippetDuration,
-        mute: false,
-        autoplay: true,
-        controls: true,
-      });
-      if (!ok) return false;
+    const ok = startYoutubeInGesture(iframe, youtubeVideoId, {
+      startSec: snippetStart,
+      durationSec: snippetDuration,
+      mute: false,
+      autoplay: true,
+      controls: true,
+    });
+    if (!ok) return;
 
-      const firstStart = !startedRef.current;
-      startedRef.current = true;
-      setHasStarted(true);
+    startedRef.current = true;
+    setHasStarted(true);
+    onClipStarted?.();
 
-      if (opts.announceStart && firstStart) {
-        onClipStarted?.();
-      }
+    // Stop audio when the snippet window ends, but keep Tap to Play UI up
+    // so the round timer ending doesn't flash Sync again.
+    clearStopTimer();
+    stopTimerRef.current = setTimeout(() => {
+      stopYoutubeIframe(iframeRef.current);
+    }, snippetDuration * 1000 + 800);
+  }, [youtubeVideoId, snippetStart, snippetDuration, onClipStarted]);
 
-      clearStopTimer();
-      stopTimerRef.current = setTimeout(() => {
-        stopYoutubeIframe(iframeRef.current);
-      }, snippetDuration * 1000 + 800);
-
-      return true;
-    },
-    [youtubeVideoId, snippetStart, snippetDuration, onClipStarted]
-  );
-
-  const handleSync = useCallback(() => {
+  const handleSyncAndPlay = useCallback(() => {
     if (!readySignaledRef.current) {
       readySignaledRef.current = true;
       onAudioReady?.();
     }
-    loadClipInGesture({ announceStart: true });
-  }, [onAudioReady, loadClipInGesture]);
-
-  /** Second-chance play: always reload embed in this gesture; do not re-fire timer. */
-  const handleTapToPlay = useCallback(() => {
-    loadClipInGesture({ announceStart: false });
-  }, [loadClipInGesture]);
+    startClip();
+  }, [onAudioReady, startClip]);
 
   useEffect(() => {
     readySignaledRef.current = false;
@@ -118,7 +103,7 @@ export default function YouTubeClipPlayer({
           style={{
             opacity: hasStarted ? 1 : 0,
             filter: hasStarted ? "blur(40px) brightness(0.35) saturate(0.5)" : undefined,
-            pointerEvents: "none",
+            pointerEvents: hasStarted ? "auto" : "none",
           }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
@@ -127,7 +112,7 @@ export default function YouTubeClipPlayer({
         {!hasStarted ? (
           <button
             type="button"
-            onClick={handleSync}
+            onClick={handleSyncAndPlay}
             className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-vinyl-accent text-black touch-manipulation active:brightness-95"
             aria-label="Tap to sync"
           >
@@ -137,17 +122,12 @@ export default function YouTubeClipPlayer({
             </span>
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={handleTapToPlay}
-            className="absolute inset-0 z-10 flex items-center justify-center touch-manipulation active:brightness-95"
-            aria-label="Tap to play"
-            style={{ background: "rgba(16, 185, 129, 0.35)" }}
+          <p
+            className="absolute inset-0 z-10 flex items-center justify-center text-center text-lg font-bold pointer-events-none drop-shadow"
+            style={{ color: "#6ee7b7" }}
           >
-            <span className="text-lg font-bold drop-shadow" style={{ color: "#6ee7b7" }}>
-              Tap to Play
-            </span>
-          </button>
+            Tap to Play
+          </p>
         )}
       </div>
     </div>

@@ -39,14 +39,6 @@ export function youtubeEmbedUrl(
     end: String(end),
   });
 
-  // Help YouTube associate the embed with this site (reduces Error 153 / blocked autoplay).
-  if (typeof window !== "undefined" && window.location?.origin) {
-    params.set("origin", window.location.origin);
-  }
-
-  // Cache-bust so a second tap always forces a fresh player load.
-  params.set("_", String(Date.now()));
-
   return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
 }
 
