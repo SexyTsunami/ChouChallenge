@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { startYoutubeInGesture, stopYoutubeIframe } from "@/lib/youtubeEmbed";
+import {
+  playYoutubeIframe,
+  startYoutubeInGesture,
+  stopYoutubeIframe,
+} from "@/lib/youtubeEmbed";
 
 interface YouTubeClipPlayerProps {
   youtubeVideoId: string;
@@ -13,13 +17,10 @@ interface YouTubeClipPlayerProps {
   onClipStarted?: () => void;
 }
 
-/** Min time between Tap to Play reloads — stops panic-taps from thrashing the embed. */
-const RELOAD_COOLDOWN_MS = 1800;
-
 /**
- * Sync starts the clip. After that, Tap to Play is OUR button (iframe never
- * receives taps) so YouTube logo / "Watch on YouTube" can't kick players out.
- * A second tap reloads the embed in-gesture when autoplay was silent.
+ * Tap to Sync starts the clip in a user gesture.
+ * Tap to Play retries play WITHOUT letting taps reach YouTube chrome
+ * (logo / Watch on YouTube would open the app and leave the game).
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -34,9 +35,7 @@ export default function YouTubeClipPlayer({
   const startedRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastLoadAtRef = useRef(0);
   const [hasStarted, setHasStarted] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
 
   const clearStopTimer = () => {
     if (stopTimerRef.current) {
@@ -52,64 +51,62 @@ export default function YouTubeClipPlayer({
     }, snippetDuration * 1000 + 800);
   }, [snippetDuration]);
 
-  const loadClipInGesture = useCallback(
-    (announceStart: boolean) => {
-      const iframe = iframeRef.current;
-      if (!iframe) return false;
+  /** Load embed inside the current tap — this is what actually unlocks mobile audio. */
+  const loadAndPlayInGesture = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return false;
 
-      const now = Date.now();
-      if (now - lastLoadAtRef.current < RELOAD_COOLDOWN_MS) return false;
-      lastLoadAtRef.current = now;
+    iframe.style.opacity = "1";
+    // Never hand taps to YouTube — our overlay owns all interaction.
+    iframe.style.pointerEvents = "none";
 
-      // Never let the iframe take taps — YouTube chrome opens the app / leaves the game.
-      iframe.style.opacity = "1";
-      iframe.style.pointerEvents = "none";
+    const ok = startYoutubeInGesture(iframe, youtubeVideoId, {
+      startSec: snippetStart,
+      durationSec: snippetDuration,
+      mute: false,
+      autoplay: true,
+      // controls=1 helps mobile autoplay succeed; overlay still blocks logo taps.
+      controls: true,
+    });
+    if (!ok) return false;
 
-      const ok = startYoutubeInGesture(iframe, youtubeVideoId, {
-        startSec: snippetStart,
-        durationSec: snippetDuration,
-        mute: false,
-        autoplay: true,
-        // No native controls: logo / title / Watch on YouTube are the escape hatches.
-        controls: false,
-      });
-      if (!ok) return false;
+    // Nudge play after the player boots (same gesture chain on most mobiles).
+    window.setTimeout(() => playYoutubeIframe(iframe), 250);
+    window.setTimeout(() => playYoutubeIframe(iframe), 700);
 
-      const firstStart = !startedRef.current;
-      startedRef.current = true;
-      setHasStarted(true);
-      setIsLoading(true);
-      window.setTimeout(() => setIsLoading(false), RELOAD_COOLDOWN_MS);
-
-      if (announceStart && firstStart) {
-        onClipStarted?.();
-      }
-
-      scheduleStop();
-      return true;
-    },
-    [youtubeVideoId, snippetStart, snippetDuration, onClipStarted, scheduleStop]
-  );
+    scheduleStop();
+    return true;
+  }, [youtubeVideoId, snippetStart, snippetDuration, scheduleStop]);
 
   const handleSync = useCallback(() => {
     if (!readySignaledRef.current) {
       readySignaledRef.current = true;
       onAudioReady?.();
     }
-    loadClipInGesture(true);
-  }, [onAudioReady, loadClipInGesture]);
+    if (startedRef.current) return;
+    if (!loadAndPlayInGesture()) return;
+
+    startedRef.current = true;
+    setHasStarted(true);
+    onClipStarted?.();
+  }, [onAudioReady, loadAndPlayInGesture, onClipStarted]);
 
   const handleTapToPlay = useCallback(() => {
-    // Reload in this gesture if audio never started — without touching YouTube UI.
-    loadClipInGesture(false);
-  }, [loadClipInGesture]);
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    // 1) Prefer commanding the already-loaded player (no full reload flicker).
+    playYoutubeIframe(iframe);
+
+    // 2) Also re-bind src in this gesture — reliable unmute/retry on iOS/Android
+    //    when the first autoplay attempt was silent.
+    loadAndPlayInGesture();
+  }, [loadAndPlayInGesture]);
 
   useEffect(() => {
     readySignaledRef.current = false;
     startedRef.current = false;
-    lastLoadAtRef.current = 0;
     setHasStarted(false);
-    setIsLoading(false);
     clearStopTimer();
     stopYoutubeIframe(iframeRef.current);
   }, [youtubeVideoId]);
@@ -132,10 +129,9 @@ export default function YouTubeClipPlayer({
           style={{
             opacity: hasStarted ? 1 : 0,
             filter: hasStarted ? "blur(40px) brightness(0.35) saturate(0.5)" : undefined,
-            // Critical: never forward taps into YouTube (opens app / navigates away).
             pointerEvents: "none",
           }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
         />
 
@@ -155,15 +151,14 @@ export default function YouTubeClipPlayer({
           <button
             type="button"
             onClick={handleTapToPlay}
-            disabled={isLoading}
-            className="absolute inset-0 z-10 flex items-center justify-center touch-manipulation disabled:cursor-wait"
+            className="absolute inset-0 z-10 flex items-center justify-center touch-manipulation active:opacity-90"
             aria-label="Tap to play"
           >
             <span
               className="text-lg font-bold drop-shadow"
               style={{ color: "#6ee7b7" }}
             >
-              {isLoading ? "Loading…" : "Tap to Play"}
+              Tap to Play
             </span>
           </button>
         )}
