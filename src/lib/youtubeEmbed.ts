@@ -34,17 +34,10 @@ export function youtubeEmbedUrl(
     playsinline: "1",
     rel: "0",
     fs: "0",
-    disablekb: "1",
     iv_load_policy: "3",
-    // Needed so postMessage playVideo works for Tap to Play retries.
-    enablejsapi: "1",
     start: String(start),
     end: String(end),
   });
-
-  if (typeof window !== "undefined" && window.location?.origin) {
-    params.set("origin", window.location.origin);
-  }
 
   return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
 }
@@ -61,20 +54,6 @@ export function startYoutubeInGesture(
   if (!iframe) return false;
   iframe.src = youtubeEmbedUrl(videoId, opts);
   return true;
-}
-
-/** Ask an already-loaded embed to play (must run inside a user gesture on mobile). */
-export function playYoutubeIframe(iframe: HTMLIFrameElement | null): void {
-  const win = iframe?.contentWindow;
-  if (!win) return;
-  const payload = JSON.stringify({
-    event: "command",
-    func: "playVideo",
-    args: [],
-  });
-  // YouTube accepts either target; send both for embed / nocookie variants.
-  win.postMessage(payload, "https://www.youtube.com");
-  win.postMessage(payload, "*");
 }
 
 export function stopYoutubeIframe(iframe: HTMLIFrameElement | null): void {

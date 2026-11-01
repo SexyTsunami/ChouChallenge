@@ -1,11 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  playYoutubeIframe,
-  startYoutubeInGesture,
-  stopYoutubeIframe,
-} from "@/lib/youtubeEmbed";
+import { startYoutubeInGesture, stopYoutubeIframe } from "@/lib/youtubeEmbed";
 
 interface YouTubeClipPlayerProps {
   youtubeVideoId: string;
@@ -18,9 +14,8 @@ interface YouTubeClipPlayerProps {
 }
 
 /**
- * Tap to Sync starts the clip in a user gesture.
- * Tap to Play retries play WITHOUT letting taps reach YouTube chrome
- * (logo / Watch on YouTube would open the app and leave the game).
+ * Green "Tap to Sync" surface → after start, stay on "Tap to Play"
+ * (different green) for the rest of the round. Video stays blurred.
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -35,6 +30,7 @@ export default function YouTubeClipPlayer({
   const startedRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Once true for this clip, never return to Tap to Sync. */
   const [hasStarted, setHasStarted] = useState(false);
 
   const clearStopTimer = () => {
@@ -44,64 +40,42 @@ export default function YouTubeClipPlayer({
     }
   };
 
-  const scheduleStop = useCallback(() => {
-    clearStopTimer();
-    stopTimerRef.current = setTimeout(() => {
-      stopYoutubeIframe(iframeRef.current);
-    }, snippetDuration * 1000 + 800);
-  }, [snippetDuration]);
-
-  /** Load embed inside the current tap — this is what actually unlocks mobile audio. */
-  const loadAndPlayInGesture = useCallback(() => {
+  const startClip = useCallback(() => {
+    if (startedRef.current) return;
     const iframe = iframeRef.current;
-    if (!iframe) return false;
+    if (!iframe) return;
 
     iframe.style.opacity = "1";
-    // Never hand taps to YouTube — our overlay owns all interaction.
-    iframe.style.pointerEvents = "none";
+    iframe.style.pointerEvents = "auto";
 
     const ok = startYoutubeInGesture(iframe, youtubeVideoId, {
       startSec: snippetStart,
       durationSec: snippetDuration,
       mute: false,
       autoplay: true,
-      // controls=1 helps mobile autoplay succeed; overlay still blocks logo taps.
       controls: true,
     });
-    if (!ok) return false;
-
-    // Nudge play after the player boots (same gesture chain on most mobiles).
-    window.setTimeout(() => playYoutubeIframe(iframe), 250);
-    window.setTimeout(() => playYoutubeIframe(iframe), 700);
-
-    scheduleStop();
-    return true;
-  }, [youtubeVideoId, snippetStart, snippetDuration, scheduleStop]);
-
-  const handleSync = useCallback(() => {
-    if (!readySignaledRef.current) {
-      readySignaledRef.current = true;
-      onAudioReady?.();
-    }
-    if (startedRef.current) return;
-    if (!loadAndPlayInGesture()) return;
+    if (!ok) return;
 
     startedRef.current = true;
     setHasStarted(true);
     onClipStarted?.();
-  }, [onAudioReady, loadAndPlayInGesture, onClipStarted]);
 
-  const handleTapToPlay = useCallback(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
+    // Stop audio when the snippet window ends, but keep Tap to Play UI up
+    // so the round timer ending doesn't flash Sync again.
+    clearStopTimer();
+    stopTimerRef.current = setTimeout(() => {
+      stopYoutubeIframe(iframeRef.current);
+    }, snippetDuration * 1000 + 800);
+  }, [youtubeVideoId, snippetStart, snippetDuration, onClipStarted]);
 
-    // 1) Prefer commanding the already-loaded player (no full reload flicker).
-    playYoutubeIframe(iframe);
-
-    // 2) Also re-bind src in this gesture — reliable unmute/retry on iOS/Android
-    //    when the first autoplay attempt was silent.
-    loadAndPlayInGesture();
-  }, [loadAndPlayInGesture]);
+  const handleSyncAndPlay = useCallback(() => {
+    if (!readySignaledRef.current) {
+      readySignaledRef.current = true;
+      onAudioReady?.();
+    }
+    startClip();
+  }, [onAudioReady, startClip]);
 
   useEffect(() => {
     readySignaledRef.current = false;
@@ -129,7 +103,7 @@ export default function YouTubeClipPlayer({
           style={{
             opacity: hasStarted ? 1 : 0,
             filter: hasStarted ? "blur(40px) brightness(0.35) saturate(0.5)" : undefined,
-            pointerEvents: "none",
+            pointerEvents: hasStarted ? "auto" : "none",
           }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
@@ -138,7 +112,7 @@ export default function YouTubeClipPlayer({
         {!hasStarted ? (
           <button
             type="button"
-            onClick={handleSync}
+            onClick={handleSyncAndPlay}
             className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-vinyl-accent text-black touch-manipulation active:brightness-95"
             aria-label="Tap to sync"
           >
@@ -148,19 +122,12 @@ export default function YouTubeClipPlayer({
             </span>
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={handleTapToPlay}
-            className="absolute inset-0 z-10 flex items-center justify-center touch-manipulation active:opacity-90"
-            aria-label="Tap to play"
+          <p
+            className="absolute inset-0 z-10 flex items-center justify-center text-center text-lg font-bold pointer-events-none drop-shadow"
+            style={{ color: "#6ee7b7" }}
           >
-            <span
-              className="text-lg font-bold drop-shadow"
-              style={{ color: "#6ee7b7" }}
-            >
-              Tap to Play
-            </span>
-          </button>
+            Tap to Play
+          </p>
         )}
       </div>
     </div>
