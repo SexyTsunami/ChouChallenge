@@ -14,8 +14,34 @@ interface YouTubeClipPlayerProps {
 }
 
 /**
- * Green "Tap to Sync" surface → after start, stay on "Tap to Play"
- * (different green) for the rest of the round. Video stays blurred.
+ * First-guess center hit zone (% of the player box).
+ * Say “wider / taller / smaller” and we’ll nudge these.
+ * YouTube’s big ▶ sits in the middle; bottom controls & corner logos stay blocked.
+ */
+const HIT_ZONE_WIDTH_PCT = 40;
+const HIT_ZONE_HEIGHT_PCT = 46;
+
+/** After this, seal the hole so spam taps can’t hit pause / other chrome. */
+const SEAL_AFTER_MS = 4500;
+
+function shieldClipPath(sealed: boolean): string {
+  if (sealed) {
+    // Full cover — no hole.
+    return "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)";
+  }
+  const w = HIT_ZONE_WIDTH_PCT;
+  const h = HIT_ZONE_HEIGHT_PCT;
+  const left = (100 - w) / 2;
+  const right = left + w;
+  const top = (100 - h) / 2;
+  const bottom = top + h;
+  // evenodd: outer rect minus inner rect → hole passes taps to the iframe.
+  return `polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${left}% ${top}%, ${right}% ${top}%, ${right}% ${bottom}%, ${left}% ${bottom}%, ${left}% ${top}%)`;
+}
+
+/**
+ * Tap to Sync starts the clip. Then a shield blocks YouTube chrome everywhere
+ * except a center hole over ▶ / “Tap to Play”.
  */
 export default function YouTubeClipPlayer({
   youtubeVideoId,
@@ -30,13 +56,21 @@ export default function YouTubeClipPlayer({
   const startedRef = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Once true for this clip, never return to Tap to Sync. */
+  const sealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
+  const [shieldSealed, setShieldSealed] = useState(false);
 
   const clearStopTimer = () => {
     if (stopTimerRef.current) {
       clearTimeout(stopTimerRef.current);
       stopTimerRef.current = null;
+    }
+  };
+
+  const clearSealTimer = () => {
+    if (sealTimerRef.current) {
+      clearTimeout(sealTimerRef.current);
+      sealTimerRef.current = null;
     }
   };
 
@@ -59,14 +93,19 @@ export default function YouTubeClipPlayer({
 
     startedRef.current = true;
     setHasStarted(true);
+    setShieldSealed(false);
     onClipStarted?.();
 
-    // Stop audio when the snippet window ends, but keep Tap to Play UI up
-    // so the round timer ending doesn't flash Sync again.
     clearStopTimer();
     stopTimerRef.current = setTimeout(() => {
       stopYoutubeIframe(iframeRef.current);
     }, snippetDuration * 1000 + 800);
+
+    // Leave the center hole open long enough for a play tap, then seal it.
+    clearSealTimer();
+    sealTimerRef.current = setTimeout(() => {
+      setShieldSealed(true);
+    }, SEAL_AFTER_MS);
   }, [youtubeVideoId, snippetStart, snippetDuration, onClipStarted]);
 
   const handleSyncAndPlay = useCallback(() => {
@@ -81,16 +120,22 @@ export default function YouTubeClipPlayer({
     readySignaledRef.current = false;
     startedRef.current = false;
     setHasStarted(false);
+    setShieldSealed(false);
     clearStopTimer();
+    clearSealTimer();
     stopYoutubeIframe(iframeRef.current);
   }, [youtubeVideoId]);
 
   useEffect(() => {
     return () => {
       clearStopTimer();
+      clearSealTimer();
       stopYoutubeIframe(iframeRef.current);
     };
   }, []);
+
+  const hitLeft = (100 - HIT_ZONE_WIDTH_PCT) / 2;
+  const hitTop = (100 - HIT_ZONE_HEIGHT_PCT) / 2;
 
   return (
     <div className="flex flex-col items-center gap-2 w-full">
@@ -105,7 +150,7 @@ export default function YouTubeClipPlayer({
             filter: hasStarted ? "blur(40px) brightness(0.35) saturate(0.5)" : undefined,
             pointerEvents: hasStarted ? "auto" : "none",
           }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           referrerPolicy="strict-origin-when-cross-origin"
         />
 
@@ -122,12 +167,39 @@ export default function YouTubeClipPlayer({
             </span>
           </button>
         ) : (
-          <p
-            className="absolute inset-0 z-10 flex items-center justify-center text-center text-lg font-bold pointer-events-none drop-shadow"
-            style={{ color: "#6ee7b7" }}
-          >
-            Tap to Play
-          </p>
+          <>
+            {/* Blocks logo / title / progress / links; hole over center ▶ */}
+            <div
+              className="absolute inset-0 z-10"
+              style={{
+                pointerEvents: "auto",
+                clipPath: shieldClipPath(shieldSealed),
+              }}
+              aria-hidden
+            />
+
+            {/* Tuning outline — remove once size feels right */}
+            {!shieldSealed && (
+              <div
+                className="absolute z-[11] pointer-events-none rounded-lg border border-dashed"
+                style={{
+                  left: `${hitLeft}%`,
+                  top: `${hitTop}%`,
+                  width: `${HIT_ZONE_WIDTH_PCT}%`,
+                  height: `${HIT_ZONE_HEIGHT_PCT}%`,
+                  borderColor: "rgba(110, 231, 183, 0.55)",
+                }}
+                aria-hidden
+              />
+            )}
+
+            <p
+              className="absolute inset-0 z-[12] flex items-center justify-center text-center text-lg font-bold pointer-events-none drop-shadow"
+              style={{ color: "#6ee7b7" }}
+            >
+              {shieldSealed ? "Playing" : "Tap to Play"}
+            </p>
+          </>
         )}
       </div>
     </div>
