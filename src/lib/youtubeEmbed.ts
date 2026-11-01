@@ -34,15 +34,10 @@ export function youtubeEmbedUrl(
     playsinline: "1",
     rel: "0",
     fs: "0",
-    disablekb: "1",
     iv_load_policy: "3",
     start: String(start),
     end: String(end),
   });
-
-  if (typeof window !== "undefined" && window.location?.origin) {
-    params.set("origin", window.location.origin);
-  }
 
   return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
 }
